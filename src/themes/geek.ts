@@ -118,4 +118,26 @@ export const geekTheme = `
   color: #d9480f;
   margin-bottom: 0.8em;
 }
+
+/* Alerts -- must match the .markdown-body blockquote.gfm-alert* shape of
+   alertsBaseCss (specificity 0,2,1). A bare .gfm-alert-note (0,1,0) would
+   lose to the base layer and to .markdown-body blockquote above.
+   Saturated hues to match the theme's high-contrast palette; WARNING sits on
+   orange rather than the house yellow so it cannot be mistaken for a plain
+   blockquote. The .gfm-alert fallback deliberately mirrors the plain
+   blockquote: it is unreachable while all five types match, and an unknown
+   future type should degrade to the theme's own quote look. */
+.markdown-body blockquote.gfm-alert {
+  margin: 1.2em 0;
+  padding: 12px 16px;
+  border-left: 4px solid #fd7e14;
+  border-radius: 4px;
+  background-color: #fff9db;
+}
+
+.markdown-body blockquote.gfm-alert-note { border-left-color: #1c7ed6; background-color: #e7f5ff; }
+.markdown-body blockquote.gfm-alert-tip { border-left-color: #2f9e44; background-color: #ebfbee; }
+.markdown-body blockquote.gfm-alert-important { border-left-color: #7048e8; background-color: #f3f0ff; }
+.markdown-body blockquote.gfm-alert-warning { border-left-color: #f76707; background-color: #fff4e6; }
+.markdown-body blockquote.gfm-alert-caution { border-left-color: #e03131; background-color: #fff5f5; }
 `;

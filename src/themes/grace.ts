@@ -119,4 +119,26 @@ export const graceTheme = `
   color: #2d6a4f;
   margin-bottom: 0.8em;
 }
+
+/* Alerts -- must match the .markdown-body blockquote.gfm-alert* shape of
+   alertsBaseCss (specificity 0,2,1). A bare .gfm-alert-note (0,1,0) would
+   lose to the base layer and to .markdown-body blockquote above.
+   Muted Morandi hues so the five types stay distinguishable without breaking
+   the theme's low-saturation palette. The .gfm-alert fallback deliberately
+   mirrors the plain blockquote: it is unreachable while all five types match,
+   and an unknown future type should degrade to the theme's own quote look. */
+.markdown-body blockquote.gfm-alert {
+  margin: 1.2em 0;
+  padding: 12px 16px;
+  color: #3f4448;
+  border-left: 4px solid #52b788;
+  border-radius: 4px;
+  background-color: #f1f8f5;
+}
+
+.markdown-body blockquote.gfm-alert-note { border-left-color: #5c8ca8; background-color: #eef4f8; }
+.markdown-body blockquote.gfm-alert-tip { border-left-color: #40916c; background-color: #e6f4ec; }
+.markdown-body blockquote.gfm-alert-important { border-left-color: #8a7ba8; background-color: #f2f0f7; }
+.markdown-body blockquote.gfm-alert-warning { border-left-color: #b48a5a; background-color: #f8f3ea; }
+.markdown-body blockquote.gfm-alert-caution { border-left-color: #b06a70; background-color: #f9eff0; }
 `;

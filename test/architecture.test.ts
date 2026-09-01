@@ -48,9 +48,10 @@ describe('capability base CSS layering', () => {
   });
 
   it('styles capability markup for themes that define none of it', async () => {
-    // Regression: grace/geek never declared .mac-code-wrapper or .gfm-alert*,
-    // so with the defaults (macCodeBlock/gfmAlerts on) they emitted bare tags.
-    const md = '```ts\nconst a = 1;\n```\n\n> [!NOTE]\n> A note.\n';
+    // Regression: grace/geek emitted bare tags for markup they declared no
+    // rules for. They now carry their own .gfm-alert* palettes, so only
+    // .mac-code-wrapper still exercises the base path through a built-in theme.
+    const md = '```ts\nconst a = 1;\n```';
 
     for (const theme of ['grace', 'geek'] as const) {
       const result = await renderMarkdownToWechat(md, {
@@ -59,8 +60,120 @@ describe('capability base CSS layering', () => {
         renderMermaid: false,
       });
       expect(styleOf(result.html, 'section'), `${theme} mac wrapper`).toContain('background-color');
-      expect(styleOf(result.html, 'blockquote'), `${theme} alert`).toContain('border-left');
     }
+
+    // No built-in theme leaves alerts to the base layer any more, so the
+    // base-alert path needs a theme that declares nothing about them.
+    const bare = await renderMarkdownToWechat('> [!NOTE]\n> A note.\n', {
+      theme: { name: 'bare', css: '.markdown-body { color: #111111; }' },
+      renderMath: false,
+      renderMermaid: false,
+    });
+    expect(styleOf(bare.html, 'blockquote')).toContain('background-color: #ddf4ff');
+  });
+
+  it('gives each GFM alert type its own colors under a theme that styles blockquotes', async () => {
+    // Regression: base and tech both declared a bare `.gfm-alert-note` (0,1,0),
+    // which lost to tech's `.markdown-body blockquote` (0,1,1). All five alert
+    // types collapsed onto the same generic blockquote look. `class` is
+    // stripped by cleanWechatAttributes, so each type is rendered separately
+    // rather than picked out of one document.
+    const styleFor = async (type: string) => {
+      const result = await renderMarkdownToWechat(`> [!${type}]\n> Body.\n`, {
+        theme: 'tech',
+        renderMath: false,
+        renderMermaid: false,
+      });
+      return styleOf(result.html, 'blockquote');
+    };
+
+    const note = await styleFor('NOTE');
+    const warning = await styleFor('WARNING');
+
+    expect(note).toContain('background-color: #ddf4ff');
+    expect(warning).toContain('background-color: #fff8c5');
+    expect(note).not.toBe(warning);
+
+    // the per-type border color must land after the border-left shorthand,
+    // or the shorthand silently resets it
+    expect(note.indexOf('border-left-color: #0969da')).toBeGreaterThan(
+      note.indexOf('border-left:'),
+    );
+  });
+
+  it('keeps all five alert types visually distinct in every built-in theme', async () => {
+    // Each theme hand-writes five hex pairs; a copy-paste typo that gives two
+    // types the same color is exactly what collapses alerts back together.
+    // Compare the *effective* colors, not the style string -- an alert always
+    // carries an extra border-left-color, so string equality never fires.
+    const types = ['NOTE', 'TIP', 'IMPORTANT', 'WARNING', 'CAUTION'] as const;
+
+    /** background plus the border color that actually wins, shorthand or longhand. */
+    const colorsOf = (style: string) => {
+      const bg = /background-color:\s*([^;]+)/.exec(style)?.[1]?.trim();
+      const longhand = /border-left-color:\s*([^;]+)/.exec(style)?.[1]?.trim();
+      const shorthand = /border-left:[^;]*?(#[0-9a-f]{3,8})/i.exec(style)?.[1];
+      return `${bg} | ${longhand ?? shorthand}`;
+    };
+
+    const quoteStyle = async (md: string, theme: string) => {
+      const result = await renderMarkdownToWechat(md, {
+        theme,
+        renderMath: false,
+        renderMermaid: false,
+      });
+      return styleOf(result.html, 'blockquote');
+    };
+
+    // each theme's own .gfm-alert fallback color -- asserting it proves the
+    // theme layer still outranks the base layer (whose fallback is #57606a).
+    // Without this, un-scoping a theme's alert rules would go unnoticed: base
+    // would take over and still produce five distinct types.
+    const brandBorder = { tech: '#0f4c81', grace: '#52b788', geek: '#fd7e14' } as const;
+
+    for (const theme of ['tech', 'grace', 'geek'] as const) {
+      const seen: string[] = [];
+      for (const type of types) {
+        const style = await quoteStyle(`> [!${type}]\n> Body.\n`, theme);
+        expect(style, `${theme} ${type} theme layer`).toContain(
+          `border-left: 4px solid ${brandBorder[theme]}`,
+        );
+
+        // a per-type border color emitted before the border-left shorthand
+        // would be silently reset by it
+        expect(style.indexOf('border-left-color:'), `${theme} ${type} order`).toBeGreaterThan(
+          style.indexOf('border-left:'),
+        );
+        const colors = colorsOf(style);
+        expect(colors, `${theme} ${type} colors`).not.toContain('undefined');
+        seen.push(colors);
+      }
+
+      expect(new Set(seen).size, `${theme} distinct alert colors`).toBe(types.length);
+
+      // and none of them may collide with the theme's own plain blockquote
+      const plain = colorsOf(await quoteStyle('> Plain quote.\n', theme));
+      expect(seen, `${theme} vs plain quote`).not.toContain(plain);
+    }
+  });
+
+  it('leaves plain blockquotes on the theme rule and keeps the theme above base', async () => {
+    const result = await renderMarkdownToWechat('> Plain quote.\n', {
+      theme: 'tech',
+      renderMath: false,
+      renderMermaid: false,
+    });
+    // scoping the alert rules must not have pulled in ordinary blockquotes
+    expect(styleOf(result.html, 'blockquote')).toContain('background-color: #f0f6fa');
+
+    // tech redeclares .gfm-alert's border-left as #0f4c81 over base's #57606a;
+    // if scoping had inverted the layering, base would win here instead
+    const alert = await renderMarkdownToWechat('> [!NOTE]\n> Body.\n', {
+      theme: 'tech',
+      renderMath: false,
+      renderMermaid: false,
+    });
+    expect(styleOf(alert.html, 'blockquote')).toContain('border-left: 4px solid #0f4c81');
   });
 
   it('keeps formula images scoped above the theme .markdown-body img rule', async () => {
