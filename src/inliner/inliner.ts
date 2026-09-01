@@ -1,11 +1,18 @@
 import juice from 'juice';
 import { sanitizeWechatHtml, patchWechatListBullets, cleanWechatAttributes } from './dom-patcher';
 import { getTheme } from '../themes';
+import { ThemeConfig } from '../types';
 
 export interface InlineOptions {
-  theme?: string;
+  theme?: string | ThemeConfig;
   customCss?: string;
   siteUrl?: string;
+  /**
+   * Structural CSS contributed by the enabled capabilities. Concatenated
+   * ahead of the theme so the theme wins on any property it redeclares while
+   * base-only properties survive. Base CSS must not use !important.
+   */
+  baseCss?: string[];
 }
 
 export function inlineWechatCss(html: string, options: InlineOptions = {}): string {
@@ -23,11 +30,12 @@ export function inlineWechatCss(html: string, options: InlineOptions = {}): stri
   // 3. Wrap in container for CSS matching
   const wrappedHtml = `<div class="markdown-body">${processedHtml}</div>`;
 
-  // 4. Resolve Theme CSS
+  // 4. Layer capability base CSS under the theme (and customCss on top)
   const themeCss = getTheme(options.theme, options.customCss);
+  const css = [...(options.baseCss ?? []), themeCss].join('\n');
 
   // 5. Juice CSS Inlining
-  const inlined = juice.inlineContent(wrappedHtml, themeCss, {
+  const inlined = juice.inlineContent(wrappedHtml, css, {
     inlinePseudoElements: true,
     preserveImportant: true,
   });

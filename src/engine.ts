@@ -5,22 +5,43 @@ import {
   RenderResult,
   DiagnosticItem,
   FootnoteItem,
+  FormulaRenderService,
+  MermaidRenderService,
 } from './types';
-import { processMarkdownFootnotes, renderFootnotesHtml } from './plugins/footnotes';
-import { decorateCodeBlocks } from './plugins/code-decorator';
-import { wrapTablesWithScroller } from './plugins/table-scroller';
-import { processGfmAlerts } from './plugins/alerts';
+import {
+  processMarkdownFootnotes,
+  renderFootnotesHtml,
+  footnotesBaseCss,
+} from './plugins/footnotes';
+import { decorateCodeBlocks, codeDecoratorBaseCss } from './plugins/code-decorator';
+import { wrapTablesWithScroller, tableScrollerBaseCss } from './plugins/table-scroller';
+import { processGfmAlerts, alertsBaseCss } from './plugins/alerts';
 import { FormulaRenderer } from './media/formula';
 import { MermaidRenderer } from './media/mermaid';
+import { formulaBaseCss, mermaidBaseCss } from './media/styles';
 import { inlineWechatCss } from './inliner/inliner';
 
 export class WechatMarkdownEngine {
-  private formulaRenderer: FormulaRenderer;
-  private mermaidRenderer: MermaidRenderer;
+  private formulaRenderer?: FormulaRenderService;
+  private mermaidRenderer?: MermaidRenderService;
 
-  constructor() {
-    this.formulaRenderer = new FormulaRenderer();
-    this.mermaidRenderer = new MermaidRenderer();
+  /**
+   * Built-in renderers are constructed lazily: they create temp directories on
+   * construction, which is wasted work when the host injects its own services
+   * or disables the capability outright.
+   */
+  private getFormulaRenderer(injected?: FormulaRenderService): FormulaRenderService {
+    if (injected) {
+      return injected;
+    }
+    return (this.formulaRenderer ??= new FormulaRenderer());
+  }
+
+  private getMermaidRenderer(injected?: MermaidRenderService): MermaidRenderService {
+    if (injected) {
+      return injected;
+    }
+    return (this.mermaidRenderer ??= new MermaidRenderer());
   }
 
   /**
@@ -52,6 +73,7 @@ export class WechatMarkdownEngine {
   private async processFormulas(
     markdown: string,
     diagnostics: DiagnosticItem[],
+    renderer: FormulaRenderService,
   ): Promise<{ markdown: string; count: number }> {
     let count = 0;
     let processed = markdown;
@@ -64,11 +86,11 @@ export class WechatMarkdownEngine {
       const fullMatch = match[0];
       const expr = match[1].trim();
       try {
-        const imagePath = await this.formulaRenderer.renderToImage(expr, true);
+        const imagePath = await renderer.renderToImage(expr, true);
         count++;
         processed = processed.replace(
           fullMatch,
-          `\n\n<p style="text-align: center;"><img src="${imagePath}" alt="formula" style="display: inline-block; max-width: 90%; margin: 12px auto;" /></p>\n\n`,
+          `\n\n<p class="wm-figure"><img src="${imagePath}" alt="formula" class="wm-formula-block" /></p>\n\n`,
         );
       } catch (err: any) {
         diagnostics.push({
@@ -91,11 +113,11 @@ export class WechatMarkdownEngine {
         continue;
       }
       try {
-        const imagePath = await this.formulaRenderer.renderToImage(expr, false);
+        const imagePath = await renderer.renderToImage(expr, false);
         count++;
         processed = processed.replace(
           fullMatch,
-          `<img src="${imagePath}" alt="formula" style="display: inline-block; vertical-align: middle; margin: 0 2px; max-height: 1.4em;" />`,
+          `<img src="${imagePath}" alt="formula" class="wm-formula-inline" />`,
         );
       } catch (err: any) {
         diagnostics.push({
@@ -115,6 +137,7 @@ export class WechatMarkdownEngine {
   private async processMermaid(
     markdown: string,
     diagnostics: DiagnosticItem[],
+    renderer: MermaidRenderService,
   ): Promise<{ markdown: string; count: number }> {
     let count = 0;
     let processed = markdown;
@@ -125,11 +148,11 @@ export class WechatMarkdownEngine {
       const fullMatch = match[0];
       const code = match[1];
       try {
-        const imagePath = await this.mermaidRenderer.renderToImage(code);
+        const imagePath = await renderer.renderToImage(code);
         count++;
         processed = processed.replace(
           fullMatch,
-          `\n\n<p style="text-align: center;"><img src="${imagePath}" alt="mermaid-diagram" style="max-width: 100%; margin: 12px auto; display: block;" /></p>\n\n`,
+          `\n\n<p class="wm-figure"><img src="${imagePath}" alt="mermaid-diagram" class="wm-mermaid" /></p>\n\n`,
         );
       } catch (err: any) {
         diagnostics.push({
@@ -163,7 +186,13 @@ export class WechatMarkdownEngine {
       renderMath = true,
       renderMermaid = true,
       resolveImage,
+      services,
     } = options;
+
+    // Structural CSS for the markup each enabled capability emits. Layered
+    // under the theme so a theme that styles nothing still renders correctly,
+    // and a theme that styles everything keeps full control.
+    const baseCss: string[] = [];
 
     // 1. Extract Frontmatter
     const { metadata, markdown } = this.extractFrontmatter(markdownInput);
@@ -193,6 +222,7 @@ export class WechatMarkdownEngine {
     // 3. Process Footnotes & External Links
     let footnotes: FootnoteItem[] = [];
     if (footnoteLinks) {
+      baseCss.push(footnotesBaseCss);
       const footnoteResult = processMarkdownFootnotes(workingMarkdown, siteUrl);
       workingMarkdown = footnoteResult.markdown;
       footnotes = footnoteResult.footnotes;
@@ -201,7 +231,12 @@ export class WechatMarkdownEngine {
     // 4. Process LaTeX Math
     let formulaCount = 0;
     if (renderMath) {
-      const formulaResult = await this.processFormulas(workingMarkdown, diagnostics);
+      baseCss.push(formulaBaseCss);
+      const formulaResult = await this.processFormulas(
+        workingMarkdown,
+        diagnostics,
+        this.getFormulaRenderer(services?.formulaRenderer),
+      );
       workingMarkdown = formulaResult.markdown;
       formulaCount = formulaResult.count;
     }
@@ -209,7 +244,12 @@ export class WechatMarkdownEngine {
     // 5. Process Mermaid Diagrams
     let mermaidCount = 0;
     if (renderMermaid) {
-      const mermaidResult = await this.processMermaid(workingMarkdown, diagnostics);
+      baseCss.push(mermaidBaseCss);
+      const mermaidResult = await this.processMermaid(
+        workingMarkdown,
+        diagnostics,
+        this.getMermaidRenderer(services?.mermaidRenderer),
+      );
       workingMarkdown = mermaidResult.markdown;
       mermaidCount = mermaidResult.count;
     }
@@ -222,16 +262,19 @@ export class WechatMarkdownEngine {
 
     // 7. Process GFM Alerts
     if (gfmAlerts) {
+      baseCss.push(alertsBaseCss);
       rawHtml = processGfmAlerts(rawHtml, true);
     }
 
     // 8. Decorate Code Blocks (Mac Style)
     if (macCodeBlock) {
+      baseCss.push(codeDecoratorBaseCss);
       rawHtml = decorateCodeBlocks(rawHtml, true);
     }
 
     // 9. Wrap Tables in Scroller
     if (tableScroller) {
+      baseCss.push(tableScrollerBaseCss);
       rawHtml = wrapTablesWithScroller(rawHtml, true);
     }
 
@@ -274,6 +317,7 @@ export class WechatMarkdownEngine {
       theme,
       customCss,
       siteUrl,
+      baseCss,
     });
 
     return {

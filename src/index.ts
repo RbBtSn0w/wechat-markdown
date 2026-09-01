@@ -7,5 +7,6 @@ export * from './plugins/table-scroller';
 export * from './plugins/alerts';
 export * from './media/formula';
 export * from './media/mermaid';
+export * from './media/styles';
 export * from './inliner/inliner';
 export * from './inliner/dom-patcher';

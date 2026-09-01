@@ -21,8 +21,18 @@ const themeRegistry: Record<string, ThemeConfig> = {
   },
 };
 
-export function getTheme(name: string = 'tech', customCss?: string): string {
-  const selected = themeRegistry[name.toLowerCase()] || themeRegistry.tech;
+/**
+ * Resolve theme CSS from a registered name or an inline ThemeConfig.
+ *
+ * Unknown names intentionally fall back to `tech` rather than throwing:
+ * downstream configs are known to carry names that were never registered, and
+ * they rely on this fallback. Any strictness here must be opt-in.
+ */
+export function getTheme(theme: string | ThemeConfig = 'tech', customCss?: string): string {
+  const selected =
+    typeof theme === 'string'
+      ? themeRegistry[theme.toLowerCase()] || themeRegistry.tech
+      : theme;
   if (customCss) {
     return `${selected.css}\n${customCss}`;
   }
