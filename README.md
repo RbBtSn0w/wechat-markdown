@@ -45,7 +45,7 @@ console.log(greeting);
 `;
 
 const result = await renderMarkdownToWechat(markdown, {
-  theme: 'tech',           // 'tech' | 'grace' | 'geek'
+  theme: 'tech',           // 'tech' | 'grace' | 'geek' | ThemeConfig
   footnoteLinks: true,     // Convert external links to footnotes
   macCodeBlock: true,      // Add Mac styling to code blocks
   tableScroller: true,     // Responsive table wrappers
@@ -68,6 +68,75 @@ import { WechatMarkdownEngine } from '@rbbtsn0w/wechat-markdown';
 const engine = new WechatMarkdownEngine();
 const result = await engine.render(markdown, { theme: 'grace' });
 ```
+
+## 🎨 Theming: two layers
+
+Styling is applied in two layers, concatenated in this order before `juice`
+inlines them:
+
+| Layer | Content | Owner |
+| --- | --- | --- |
+| **Capability base CSS** | Structural rules for the markup each enabled capability emits (`.mac-code-wrapper`, `.gfm-alert*`, `.table-scroller`, `.footnote*`, `.wm-formula-*`, `.wm-mermaid`), in neutral colors | Ships with the capability |
+| **Theme (+ `customCss`)** | Brand appearance — colors, type scale, spacing | You |
+
+A theme therefore only has to declare what it wants to *change*. A 20-line
+brand sheet that styles nothing but `.markdown-body` typography still renders
+Mac code chrome and GFM alerts correctly, because the base layer supplies them.
+
+Two rules when writing a theme or your own base CSS:
+
+- **Base CSS must never use `!important`.** The theme is layered after it, and
+  `!important` in the base layer would beat every brand override.
+- **Beware `.markdown-body img`.** A rule like `.markdown-body img { ... }`
+  has specificity (0,1,1) and outranks a bare `.wm-formula-inline` (0,1,0)
+  regardless of order. The built-in base rules are scoped as
+  `.markdown-body img.wm-formula-inline` (0,2,1) for this reason; to override
+  them, match that specificity or use `!important`.
+
+Each capability's base CSS is exported (`codeDecoratorBaseCss`,
+`alertsBaseCss`, `tableScrollerBaseCss`, `footnotesBaseCss`, `formulaBaseCss`,
+`mermaidBaseCss`) if you want to read the baseline you are overriding.
+
+### Passing a theme without touching the global registry
+
+`registerTheme(name, css)` mutates a process-global registry, so two consumers
+in one process overwrite each other. Prefer passing the config inline:
+
+```typescript
+import { renderMarkdownToWechat, ThemeConfig } from '@rbbtsn0w/wechat-markdown';
+
+const brand: ThemeConfig = { name: 'brand', css: '.markdown-body { color: #222; }' };
+const result = await renderMarkdownToWechat(markdown, { theme: brand });
+```
+
+Unknown theme names fall back to `tech` rather than throwing.
+
+## 🔌 Injecting render services
+
+The engine owns the *orchestration* of formulas and diagrams (finding them,
+substituting an `<img>`, counting, emitting diagnostics). It does not need to
+own the *asset lifecycle*. If your app renders, hashes, caches and uploads its
+own images, inject a service instead of disabling the capability:
+
+```typescript
+const result = await renderMarkdownToWechat(markdown, {
+  renderMath: true,
+  services: {
+    formulaRenderer: {
+      async renderToImage(expression, display) {
+        const png = await myRenderer.render(expression, display);
+        return await myCdn.upload(png);   // returns a final URL
+      },
+    },
+  },
+});
+```
+
+The string a service returns is **substituted into `src` verbatim** — a local
+path, a `data:` URI, and an already-uploaded CDN URL are all valid. Omit
+`services` to use the built-in MathJax and Kroki renderers.
+
+For plain (non-generated) images, use the `resolveImage` hook instead.
 
 ## 🧪 Testing
 

@@ -1,5 +1,48 @@
 import { FootnoteItem } from '../types';
 
+/**
+ * Structural styling for the markup this plugin emits. See the note on
+ * codeDecoratorBaseCss about the no-!important rule.
+ *
+ * #576b95 is WeChat's own in-article link color, matching what the WeChat
+ * editor renders for neutered links.
+ */
+export const footnotesBaseCss = `
+.footnote-ref {
+  color: #57606a;
+  font-size: 0.8em;
+  vertical-align: super;
+  text-decoration: none;
+  font-weight: 600;
+  padding: 0 2px;
+}
+
+.footnotes-container {
+  margin-top: 2.5em;
+  padding-top: 1.2em;
+  border-top: 1px dashed #d0d7de;
+  font-size: 0.85em;
+  color: #666666;
+}
+
+.footnotes-title {
+  font-size: 1.05em;
+  font-weight: 700;
+  color: #57606a;
+  margin-bottom: 0.8em;
+}
+
+.footnote-item {
+  margin: 0.4em 0;
+  word-break: break-all;
+}
+
+.footnote-url {
+  color: #576b95;
+  text-decoration: underline;
+}
+`;
+
 export interface ProcessFootnotesResult {
   markdown: string;
   footnotes: FootnoteItem[];
@@ -58,7 +101,7 @@ export function renderFootnotesHtml(footnotes: FootnoteItem[]): string {
 
   const itemsHtml = footnotes
     .map((item) => {
-      return `<p class="footnote-item"><strong>[${item.index}]</strong> ${item.title}: <span style="color: #576b95; text-decoration: underline;">${item.url}</span></p>`;
+      return `<p class="footnote-item"><strong>[${item.index}]</strong> ${item.title}: <span class="footnote-url">${item.url}</span></p>`;
     })
     .join('\n');
 
