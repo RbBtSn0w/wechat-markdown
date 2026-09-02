@@ -21,9 +21,16 @@ An extensible, headless TypeScript SDK designed to convert Markdown into pixel-p
 ```bash
 # Via npm
 npm install @rbbtsn0w/wechat-markdown
+```
 
-# Via GitHub Packages
-npm install @rbbtsn0w/wechat-markdown --registry=https://npm.pkg.github.com
+For GitHub Packages, add the scope-specific registry to `.npmrc` before installing:
+
+```ini
+@rbbtsn0w:registry=https://npm.pkg.github.com
+```
+
+```bash
+npm install @rbbtsn0w/wechat-markdown
 ```
 
 ## Releasing

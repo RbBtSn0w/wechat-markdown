@@ -13,7 +13,8 @@
     [
       "@semantic-release/exec",
       {
-        "publishCmd": "npm publish . --registry=https://npm.pkg.github.com"
+        "shell": true,
+        "publishCmd": "NODE_AUTH_TOKEN=$GITHUB_TOKEN npm publish . --registry=https://npm.pkg.github.com"
       }
     ],
     [
