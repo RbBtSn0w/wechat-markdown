@@ -1,3 +1,11 @@
+## [1.1.1](https://github.com/RbBtSn0w/wechat-markdown/compare/v1.1.0...v1.1.1) (2026-09-02)
+
+
+### Bug Fixes
+
+* correct doc comments in grace theme and alerts base CSS ([9db5811](https://github.com/RbBtSn0w/wechat-markdown/commit/9db581147429d3aef64dada10753fb93f7a46858)), closes [#3f4448](https://github.com/RbBtSn0w/wechat-markdown/issues/3f4448) [#52796](https://github.com/RbBtSn0w/wechat-markdown/issues/52796)
+* GFM alerts never show their per-type colors ([b89c3f7](https://github.com/RbBtSn0w/wechat-markdown/commit/b89c3f70b67e3c2fdf5ecdf30c5220d63d8bfaf2))
+
 # [1.1.0](https://github.com/RbBtSn0w/wechat-markdown/compare/v1.0.1...v1.1.0) (2026-09-02)
 
 
