@@ -21,6 +21,19 @@ import { MermaidRenderer } from './media/mermaid';
 import { formulaBaseCss, mermaidBaseCss } from './media/styles';
 import { inlineWechatCss } from './inliner/inliner';
 
+/**
+ * Escapes HTML attribute metacharacters. Render services are host-injectable
+ * (FormulaRenderService/MermaidRenderService), so their output is untrusted
+ * before it's embedded into an `src="..."` attribute.
+ */
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 export class WechatMarkdownEngine {
   private formulaRenderer?: FormulaRenderService;
   private mermaidRenderer?: MermaidRenderService;
@@ -90,7 +103,7 @@ export class WechatMarkdownEngine {
         count++;
         processed = processed.replace(
           fullMatch,
-          `\n\n<p class="wm-figure"><img src="${imagePath}" alt="formula" class="wm-formula-block" /></p>\n\n`,
+          `\n\n<p class="wm-figure"><img src="${escapeHtmlAttribute(imagePath)}" alt="formula" class="wm-formula-block" /></p>\n\n`,
         );
       } catch (err: any) {
         diagnostics.push({
@@ -117,7 +130,7 @@ export class WechatMarkdownEngine {
         count++;
         processed = processed.replace(
           fullMatch,
-          `<img src="${imagePath}" alt="formula" class="wm-formula-inline" />`,
+          `<img src="${escapeHtmlAttribute(imagePath)}" alt="formula" class="wm-formula-inline" />`,
         );
       } catch (err: any) {
         diagnostics.push({
@@ -152,7 +165,7 @@ export class WechatMarkdownEngine {
         count++;
         processed = processed.replace(
           fullMatch,
-          `\n\n<p class="wm-figure"><img src="${imagePath}" alt="mermaid-diagram" class="wm-mermaid" /></p>\n\n`,
+          `\n\n<p class="wm-figure"><img src="${escapeHtmlAttribute(imagePath)}" alt="mermaid-diagram" class="wm-mermaid" /></p>\n\n`,
         );
       } catch (err: any) {
         diagnostics.push({

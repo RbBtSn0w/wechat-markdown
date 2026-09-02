@@ -50,7 +50,7 @@ export interface RenderOptions {
   /**
    * A registered theme name, or a ThemeConfig used directly. Passing the
    * object avoids mutating the process-global registry via registerTheme.
-   * Unknown names fall back to the default theme rather than throwing.
+   * Unknown names fall back to the "tech" theme rather than throwing.
    */
   theme?: string | ThemeConfig;
   customCss?: string;
