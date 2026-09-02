@@ -87,11 +87,13 @@ Two rules when writing a theme or your own base CSS:
 
 - **Base CSS must never use `!important`.** The theme is layered after it, and
   `!important` in the base layer would beat every brand override.
-- **Beware `.markdown-body img`.** A rule like `.markdown-body img { ... }`
-  has specificity (0,1,1) and outranks a bare `.wm-formula-inline` (0,1,0)
-  regardless of order. The built-in base rules are scoped as
-  `.markdown-body img.wm-formula-inline` (0,2,1) for this reason; to override
-  them, match that specificity or use `!important`.
+- **Beware element-scoped theme rules.** `.markdown-body img { ... }` and
+  `.markdown-body blockquote { ... }` have specificity (0,1,1) and outrank a
+  bare `.wm-formula-inline` or `.gfm-alert-note` (0,1,0) regardless of order.
+  The affected base rules are therefore scoped one level higher —
+  `.markdown-body img.wm-formula-inline` and
+  `.markdown-body blockquote.gfm-alert-note` (0,2,1). To override them, match
+  that specificity (all three built-in themes do) or use `!important`.
 
 Each capability's base CSS is exported (`codeDecoratorBaseCss`,
 `alertsBaseCss`, `tableScrollerBaseCss`, `footnotesBaseCss`, `formulaBaseCss`,

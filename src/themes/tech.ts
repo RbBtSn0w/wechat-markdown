@@ -223,8 +223,10 @@ export const techTheme = `
   word-break: break-all;
 }
 
-/* Alerts */
-.gfm-alert {
+/* Alerts -- must match the .markdown-body blockquote.gfm-alert* shape of
+   alertsBaseCss (specificity 0,2,1). A bare .gfm-alert-note (0,1,0) would
+   lose to the base layer and to .markdown-body blockquote above. */
+.markdown-body blockquote.gfm-alert {
   margin: 1.2em 0;
   padding: 12px 16px;
   border-left: 4px solid #0f4c81;
@@ -232,11 +234,11 @@ export const techTheme = `
   background-color: #f6f8fa;
 }
 
-.gfm-alert-note { border-left-color: #0969da; background-color: #ddf4ff; }
-.gfm-alert-tip { border-left-color: #1a7f37; background-color: #dafbe1; }
-.gfm-alert-important { border-left-color: #8250df; background-color: #fbefff; }
-.gfm-alert-warning { border-left-color: #9a6700; background-color: #fff8c5; }
-.gfm-alert-caution { border-left-color: #cf222e; background-color: #ffebe9; }
+.markdown-body blockquote.gfm-alert-note { border-left-color: #0969da; background-color: #ddf4ff; }
+.markdown-body blockquote.gfm-alert-tip { border-left-color: #1a7f37; background-color: #dafbe1; }
+.markdown-body blockquote.gfm-alert-important { border-left-color: #8250df; background-color: #fbefff; }
+.markdown-body blockquote.gfm-alert-warning { border-left-color: #9a6700; background-color: #fff8c5; }
+.markdown-body blockquote.gfm-alert-caution { border-left-color: #cf222e; background-color: #ffebe9; }
 
 .gfm-alert-title {
   font-weight: 700;
