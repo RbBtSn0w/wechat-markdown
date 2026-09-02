@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/RbBtSn0w/wechat-markdown/compare/v1.1.1...v1.2.0) (2026-09-02)
+
+
+### Features
+
+* **release:** publish to npm and GitHub Packages ([#6](https://github.com/RbBtSn0w/wechat-markdown/issues/6)) ([c38bcdf](https://github.com/RbBtSn0w/wechat-markdown/commit/c38bcdf01c7b7e978938bb5a65e60eae525e3c5e))
+
 ## [1.1.1](https://github.com/RbBtSn0w/wechat-markdown/compare/v1.1.0...v1.1.1) (2026-09-02)
 
 

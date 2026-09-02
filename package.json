@@ -1,6 +1,6 @@
 {
   "name": "@rbbtsn0w/wechat-markdown",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "High-fidelity Markdown to WeChat Official Account HTML converter SDK & middleware",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
