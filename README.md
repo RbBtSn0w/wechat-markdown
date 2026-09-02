@@ -19,12 +19,16 @@ An extensible, headless TypeScript SDK designed to convert Markdown into pixel-p
 ## 📦 Installation
 
 ```bash
+# Via npm
 npm install @rbbtsn0w/wechat-markdown
+
+# Via GitHub Packages
+npm install @rbbtsn0w/wechat-markdown --registry=https://npm.pkg.github.com
 ```
 
 ## Releasing
 
-Releases from `main` publish to npm using trusted publishing. A package that has never been published to npm must be bootstrapped manually because it has no npm settings page yet:
+Releases from `main` publish to npm using trusted publishing and GitHub Packages using `GITHUB_TOKEN`. A package that has never been published to npm must be bootstrapped manually because it has no npm settings page yet:
 
 ```bash
 npm login

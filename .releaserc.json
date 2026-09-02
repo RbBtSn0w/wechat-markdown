@@ -11,6 +11,12 @@
       }
     ],
     [
+      "@semantic-release/exec",
+      {
+        "publishCmd": "npm publish . --registry=https://npm.pkg.github.com"
+      }
+    ],
+    [
       "@semantic-release/git",
       {
         "assets": ["package.json", "CHANGELOG.md"],
