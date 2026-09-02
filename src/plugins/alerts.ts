@@ -4,12 +4,14 @@
  *
  * The alert selectors are deliberately scoped as
  * `.markdown-body blockquote.gfm-alert-note` (specificity 0,2,1) rather than a
- * bare `.gfm-alert-note` (0,1,0). Every theme declares
+ * bare `.gfm-alert-note` (0,1,0). Every built-in theme declares
  * `.markdown-body blockquote { background-color: ...; border-left: ... }`
  * (0,1,1) -- see themes/tech.ts -- which outranks a bare class regardless of
  * concatenation order and collapsed all five alert types onto one generic
- * blockquote look. Same defect class as the `img.wm-formula-*` rules; the
- * rationale block in media/styles.ts covers it in full.
+ * blockquote look. (A minimal custom theme that skips blockquote styling
+ * entirely wouldn't hit this, but the scoped selector is harmless for it too.)
+ * Same defect class as the `img.wm-formula-*` rules; the rationale block in
+ * media/styles.ts covers it in full.
  *
  * Consequence for themes: a theme that wants to restyle alerts must match this
  * shape (`.markdown-body blockquote.gfm-alert-note`), because a bare

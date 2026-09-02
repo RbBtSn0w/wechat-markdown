@@ -130,7 +130,7 @@ export const graceTheme = `
 .markdown-body blockquote.gfm-alert {
   margin: 1.2em 0;
   padding: 12px 16px;
-  color: #3f4448;
+  color: #52796f;
   border-left: 4px solid #52b788;
   border-radius: 4px;
   background-color: #f1f8f5;
