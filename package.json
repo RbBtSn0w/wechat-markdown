@@ -4,6 +4,7 @@
   "description": "High-fidelity Markdown to WeChat Official Account HTML converter SDK & middleware",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "typings": "dist/index.d.ts",
   "files": [
     "dist"
   ],
