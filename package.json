@@ -24,10 +24,12 @@
   },
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint 'src/**/*.{ts,js}'",
-    "format": "prettier --write 'src/**/*.{ts,js}'"
+    "format": "prettier --write 'src/**/*.{ts,js}'",
+    "audit:prod": "npm audit --omit=dev --audit-level=high"
   },
   "keywords": [
     "markdown",
