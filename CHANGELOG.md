@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/RbBtSn0w/wechat-markdown/compare/v1.2.0...v1.3.0) (2026-09-06)
+
+
+### Features
+
+* **ci:** modernize release train with dual-branch and dev previews ([#8](https://github.com/RbBtSn0w/wechat-markdown/issues/8)) ([9c6d92a](https://github.com/RbBtSn0w/wechat-markdown/commit/9c6d92a6a28ea5c2a1c6ebeb9aeae08e46e6bff0)), closes [#10](https://github.com/RbBtSn0w/wechat-markdown/issues/10) [#9](https://github.com/RbBtSn0w/wechat-markdown/issues/9)
+
 # [1.2.0](https://github.com/RbBtSn0w/wechat-markdown/compare/v1.1.1...v1.2.0) (2026-09-02)
 
 
