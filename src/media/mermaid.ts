@@ -26,7 +26,8 @@ export class MermaidRenderer {
   }
 
   getHash(mermaidCode: string): string {
-    return crypto.createHash('md5').update(mermaidCode.trim()).digest('hex');
+    const sanitized = this.sanitizeMermaid(mermaidCode.trim());
+    return crypto.createHash('md5').update(sanitized).digest('hex');
   }
 
   getTargetPath(hash: string): string {
@@ -43,14 +44,14 @@ export class MermaidRenderer {
   }
 
   async renderToImage(mermaidCode: string): Promise<string> {
-    const hash = this.getHash(mermaidCode);
+    const sanitized = this.sanitizeMermaid(mermaidCode.trim());
+    const hash = this.getHash(sanitized);
     const targetPath = this.getTargetPath(hash);
 
     if (fs.existsSync(targetPath)) {
       return targetPath;
     }
 
-    const sanitized = this.sanitizeMermaid(mermaidCode.trim());
     const data = Buffer.from(sanitized, 'utf8');
     const compressed = pako.deflate(data, { level: 9 });
     const result = Buffer.from(compressed)
@@ -78,21 +79,27 @@ export class MermaidRenderer {
             const svgBuffer = Buffer.from(response.data as string, 'utf8');
             await sharp(svgBuffer).png({ quality: 95 }).toFile(targetPath);
           } else {
-            fs.writeFileSync(targetPath, response.data as Buffer);
+            fs.writeFileSync(targetPath, Buffer.from(response.data));
           }
 
           return targetPath;
         } catch (err: any) {
           lastError = err;
+          const status = err?.response?.status;
+          // Fail fast on client errors (4xx) other than rate limiting (429)
+          if (status && status >= 400 && status < 500 && status !== 429) {
+            break;
+          }
           if (attempt < this.maxRetries) {
-            await new Promise((res) => setTimeout(res, 1000 * attempt));
+            const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), 8000);
+            await new Promise((res) => setTimeout(res, backoffMs));
           }
         }
       }
     }
 
     throw new Error(
-      `Failed to render Mermaid diagram after retries: ${lastError?.message || 'Unknown error'}`
+      `Failed to render Mermaid diagram after retries: ${lastError?.message || 'Unknown error'}`,
     );
   }
 }

@@ -1,3 +1,5 @@
+import path from 'path';
+import os from 'os';
 import { describe, it, expect } from 'vitest';
 import { MermaidRenderer } from '../src/media/mermaid';
 
@@ -22,9 +24,17 @@ graph TD
     expect(renderer.getHash(code1)).toBe(renderer.getHash(code2));
   });
 
+  it('generates consistent hashes for code that sanitizes to the same output', () => {
+    const code1 = 'graph TD\n  A[Draft & Review] --> B';
+    const code2 = 'graph TD\n  A["Draft & Review"] --> B';
+    expect(renderer.getHash(code1)).toBe(renderer.getHash(code2));
+  });
+
   it('generates png target paths inside the designated temp dir', () => {
+    const customTemp = path.join(os.tmpdir(), 'custom-mermaid-cache');
+    const customRenderer = new MermaidRenderer(customTemp);
     const hash = 'abc12345';
-    const targetPath = renderer.getTargetPath(hash);
-    expect(targetPath).toMatch(/abc12345\.png$/);
+    const targetPath = customRenderer.getTargetPath(hash);
+    expect(targetPath).toBe(path.join(customTemp, `${hash}.png`));
   });
 });
