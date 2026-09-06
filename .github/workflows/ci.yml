@@ -41,10 +41,13 @@ jobs:
             if npm run audit:prod; then
               exit 0
             fi
-            echo "npm audit failed (attempt $i/3); retrying in 5s..."
-            sleep 5
+            if [ "$i" -lt 3 ]; then
+              echo "npm audit failed (attempt $i/3); retrying in 5s..."
+              sleep 5
+            fi
           done
-          npm run audit:prod
+          echo "npm audit failed after 3 attempts."
+          exit 1
 
   pr-dev-release:
     name: PR Dev Preview Release
@@ -92,27 +95,15 @@ jobs:
 
       - name: Publish to npm (next dist-tag)
         id: npm_publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           DEV_VERSION="${{ steps.versioning.outputs.dev_version }}"
-          if [ -n "${NODE_AUTH_TOKEN}" ]; then
-            echo "Publishing ${DEV_VERSION} to npm with NPM_TOKEN..."
-            if npm publish --tag next --access public; then
-              echo "npm_published=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "npm_published=false" >> "$GITHUB_OUTPUT"
-              echo "::warning::npm publish with NPM_TOKEN failed."
-            fi
+          echo "Attempting OIDC provenance publish for ${DEV_VERSION}..."
+          sed -i.bak '/_authToken/d' ~/.npmrc || true
+          if npm publish --provenance --tag next --access public --ignore-scripts; then
+            echo "npm_published=true" >> "$GITHUB_OUTPUT"
           else
-            echo "NPM_TOKEN secret is not set; attempting OIDC provenance publish..."
-            sed -i.bak '/_authToken/d' ~/.npmrc || true
-            if npm publish --provenance --tag next --access public; then
-              echo "npm_published=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "npm_published=false" >> "$GITHUB_OUTPUT"
-              echo "::warning::npm publish via OIDC rejected."
-            fi
+            echo "npm_published=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::npm publish via OIDC rejected (PR dev preview available via GitHub Packages)."
           fi
 
       - name: Mirror to GitHub Packages
@@ -130,7 +121,7 @@ jobs:
             echo "@${OWNER_LOWER}:registry=https://npm.pkg.github.com"
             echo '//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}'
           } > .npmrc
-          if npm publish --registry https://npm.pkg.github.com --tag next 2> "$publish_log"; then
+          if npm publish --registry https://npm.pkg.github.com --tag next --ignore-scripts 2> "$publish_log"; then
             echo "gh_packages_published=true" >> "$GITHUB_OUTPUT"
           else
             echo "gh_packages_published=false" >> "$GITHUB_OUTPUT"
