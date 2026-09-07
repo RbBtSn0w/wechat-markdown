@@ -1,26 +1,75 @@
-# @rbbtsn0w/wechat-markdown
+<div align="center">
 
-> High-fidelity Markdown to WeChat Official Account HTML converter SDK & middleware.
+# wechat-markdown
 
-An extensible, headless TypeScript SDK designed to convert Markdown into pixel-perfect, WeChat Official Account compatible HTML with inlined CSS styles, footnotes, math rendering, and mobile-friendly layouts.
+<p align="center">
+  <strong>High-fidelity Markdown to WeChat Official Account HTML converter SDK & middleware</strong>
+  <br />
+  <strong>微信公众号 Markdown 格式化排版转换器 · 无头 TypeScript SDK</strong>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@rbbtsn0w/wechat-markdown"><img src="https://img.shields.io/npm/v/@rbbtsn0w/wechat-markdown.svg?style=flat-square&color=blue" alt="npm version" /></a>
+  <a href="https://github.com/RbBtSn0w/wechat-markdown/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/RbBtSn0w/wechat-markdown/ci.yml?branch=main&style=flat-square&label=CI" alt="Build Status" /></a>
+  <a href="https://www.npmjs.com/package/@rbbtsn0w/wechat-markdown"><img src="https://img.shields.io/npm/dm/@rbbtsn0w/wechat-markdown?style=flat-square&color=success" alt="Downloads" /></a>
+  <a href="https://github.com/RbBtSn0w/wechat-markdown/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-ISC-green.svg?style=flat-square" alt="License" /></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.x-blue?style=flat-square&logo=typescript" alt="TypeScript" /></a>
+</p>
+
+</div>
+
+---
+
+**wechat-markdown** is an extensible, headless TypeScript SDK and middleware designed to convert Markdown documents into pixel-perfect, WeChat Official Account (微信公众号) compatible HTML. It solves pervasive WeChat editor rendering quirks with inlined CSS styles via `juice`, automatic external link-to-footnote conversion, MathJax LaTeX mathematical formulas, Kroki/Mermaid diagrams, and mobile-responsive layouts.
+
+> **wechat-markdown** 是专为微信公众平台（WeChat Official Accounts）设计的无头 Markdown 排版转换引擎与中间件。通过 CSS 行内化处理、消除列表多余黑点（Phantom Bullets）、外链自动转底部脚注、Mac 风格代码块、自适应横向滚动表格、LaTeX 数学公式与 Mermaid 流程图渲染，助你一键生成可直接粘贴至微信公众平台的纯净 HTML 文章。
+
+---
+
+## 📑 Table of Contents
+
+- [🌟 Highlights](#-highlights)
+- [📦 Installation](#-installation)
+- [🚀 Quick Start](#-quick-start)
+  - [Functional API](#functional-api)
+  - [Class-based Engine](#class-based-engine)
+- [🎨 Theming System: Two Layers](#-theming-system-two-layers)
+  - [Passing Themes Inline](#passing-a-theme-without-touching-the-global-registry)
+- [🔌 Extensibility: Injecting Render Services](#-extensibility-injecting-render-services)
+- [🚢 Release Workflow](#-release-workflow)
+- [🧪 Testing & Verification](#-testing--verification)
+- [🛠️ Build](#️-build)
+- [📄 License](#-license)
+
+---
 
 ## 🌟 Highlights
 
-- 🎨 **Multi-Theme System**: Built-in `tech` (Modern Blue), `grace` (Morandi Green), and `geek` (High Contrast Orange/Dark) themes with custom CSS support.
-- 📱 **WeChat Quirks Fixed**:
-  - Eliminates Phantom Bullets by stripping `\n` whitespace around `<li>` tags.
-  - Sanitizes forbidden IDs and classes while preserving computed inline `style` attributes.
-- 🔗 **Automatic Footnotes**: Converts external links `[Text](URL)` into `Text[1]` and automatically appends a formatted reference list at the bottom.
-- 💻 **Mac-Style Code Blocks**: Elegant terminal headers with red, yellow, and green dots, language badges, and horizontal scroll containers.
-- 📊 **Responsive Tables**: Wraps Markdown tables in `-webkit-overflow-scrolling: touch` containers to avoid narrow screen distortion on mobile.
-- 🧮 **LaTeX & Mermaid**: Renders inline `$...$` and block `$$...$$` MathJax formulas, and Mermaid diagrams (with fallback degradation).
-- 🔌 **Async Image Resolver Hook**: Allows injecting custom image uploading/CDN routing pipelines before final HTML generation.
+- 🎨 **Multi-Theme System (多套精选主题)**: Built-in `tech` (Modern Blue), `grace` (Morandi Green), and `geek` (High Contrast Orange/Dark) themes with zero-config two-layer styling and `customCss` overrides.
+- 📱 **WeChat Quirks Fixed (针对微信排版引擎修复)**:
+  - **Eliminates Phantom Bullets**: Strips `\n` whitespace around `<li>` tags so WeChat doesn't render unwanted stray bullet dots.
+  - **Class & ID Sanitization**: Sanitizes forbidden IDs and classes while preserving computed inline `style` attributes.
+- 🔗 **Automatic Footnotes (外链自动转脚注)**: WeChat restricts direct outbound hyperlinks; `wechat-markdown` transforms `[Text](URL)` into `Text[1]` and automatically compiles a clean reference list at the article's footer.
+- 💻 **Mac-Style Code Blocks (Mac 风格代码高亮容器)**: Elegant macOS terminal header with red, yellow, and green dots, language badges, and smooth horizontal scrolling containers.
+- 📊 **Responsive Tables (自适应移动端表格)**: Wraps Markdown tables in `-webkit-overflow-scrolling: touch` wrappers to prevent narrow screen layout collapse on iOS and Android.
+- 🧮 **LaTeX & Mermaid (数学公式与图表)**: Seamlessly renders inline `$...$` and block `$$...$$` MathJax formulas, alongside Mermaid diagrams (with fallback degradation).
+- 🔌 **Async Image Resolver Hook (自定义图片上传/CDN 钩子)**: Pluggable async pipeline to upload local assets to your object storage / CDN before compiling the final HTML.
+
+---
 
 ## 📦 Installation
 
+Install via npm / pnpm / yarn:
+
 ```bash
-# Via npm
+# npm
 npm install @rbbtsn0w/wechat-markdown
+
+# pnpm
+pnpm add @rbbtsn0w/wechat-markdown
+
+# yarn
+yarn add @rbbtsn0w/wechat-markdown
 ```
 
 For GitHub Packages, add the scope-specific registry to `.npmrc` before installing:
@@ -75,19 +124,19 @@ console.log(greeting);
 `;
 
 const result = await renderMarkdownToWechat(markdown, {
-  theme: 'tech',           // 'tech' | 'grace' | 'geek' | ThemeConfig
-  footnoteLinks: true,     // Convert external links to footnotes
-  macCodeBlock: true,      // Add Mac styling to code blocks
-  tableScroller: true,     // Responsive table wrappers
+  theme: 'tech', // 'tech' | 'grace' | 'geek' | ThemeConfig
+  footnoteLinks: true, // Convert external links to footnotes
+  macCodeBlock: true, // Add Mac styling to code blocks
+  tableScroller: true, // Responsive table wrappers
   resolveImage: async (src, alt) => {
     // Optional: upload local image to CDN and return remote URL
     return src;
   },
 });
 
-console.log(result.html);        // WeChat-ready inline HTML
-console.log(result.title);       // "Getting Started"
-console.log(result.footnotes);   // Footnote items
+console.log(result.html); // WeChat-ready inline HTML
+console.log(result.title); // "Getting Started"
+console.log(result.footnotes); // Footnote items
 ```
 
 ### Class-based Engine
@@ -104,12 +153,12 @@ const result = await engine.render(markdown, { theme: 'grace' });
 Styling is applied in two layers, concatenated in this order before `juice`
 inlines them:
 
-| Layer | Content | Owner |
-| --- | --- | --- |
-| **Capability base CSS** | Structural rules for the markup each enabled capability emits (`.mac-code-wrapper`, `.gfm-alert*`, `.table-scroller`, `.footnote*`, `.wm-formula-*`, `.wm-mermaid`), in neutral colors | Ships with the capability |
-| **Theme (+ `customCss`)** | Brand appearance — colors, type scale, spacing | You |
+| Layer                     | Content                                                                                                                                                                                | Owner                     |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| **Capability base CSS**   | Structural rules for the markup each enabled capability emits (`.mac-code-wrapper`, `.gfm-alert*`, `.table-scroller`, `.footnote*`, `.wm-formula-*`, `.wm-mermaid`), in neutral colors | Ships with the capability |
+| **Theme (+ `customCss`)** | Brand appearance — colors, type scale, spacing                                                                                                                                         | You                       |
 
-A theme therefore only has to declare what it wants to *change*. A 20-line
+A theme therefore only has to declare what it wants to _change_. A 20-line
 brand sheet that styles nothing but `.markdown-body` typography still renders
 Mac code chrome and GFM alerts correctly, because the base layer supplies them.
 
@@ -145,9 +194,9 @@ Unknown theme names fall back to `tech` rather than throwing.
 
 ## 🔌 Injecting render services
 
-The engine owns the *orchestration* of formulas and diagrams (finding them,
+The engine owns the _orchestration_ of formulas and diagrams (finding them,
 substituting an `<img>`, counting, emitting diagnostics). It does not need to
-own the *asset lifecycle*. If your app renders, hashes, caches and uploads its
+own the _asset lifecycle_. If your app renders, hashes, caches and uploads its
 own images, inject a service instead of disabling the capability:
 
 ```typescript
@@ -157,7 +206,7 @@ const result = await renderMarkdownToWechat(markdown, {
     formulaRenderer: {
       async renderToImage(expression, display) {
         const png = await myRenderer.render(expression, display);
-        return await myCdn.upload(png);   // returns a final URL
+        return await myCdn.upload(png); // returns a final URL
       },
     },
   },
@@ -170,10 +219,23 @@ path, a `data:` URI, and an already-uploaded CDN URL are all valid. Omit
 
 For plain (non-generated) images, use the `resolveImage` hook instead.
 
-## 🧪 Testing
+## 🧪 Testing & Verification
 
 ```bash
+# Run unit tests
 npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Static type check
+npm run typecheck
+
+# Code style lint
+npm run lint
+
+# Check production dependencies security
+npm run audit:prod
 ```
 
 ## 🛠️ Build
