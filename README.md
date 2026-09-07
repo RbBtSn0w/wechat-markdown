@@ -10,9 +10,9 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@rbbtsn0w/wechat-markdown"><img src="https://img.shields.io/npm/v/@rbbtsn0w/wechat-markdown.svg?style=flat-square&color=blue" alt="npm version" /></a>
-  <a href="https://github.com/RbBtSn0w/wechat-markdown/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/RbBtSn0w/wechat-markdown/ci.yml?branch=main&style=flat-square&label=CI" alt="Build Status" /></a>
+  <a href="https://github.com/RbBtSn0w/wechat-markdown/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/RbBtSn0w/wechat-markdown/ci.yml?style=flat-square&label=CI" alt="Build Status" /></a>
   <a href="https://www.npmjs.com/package/@rbbtsn0w/wechat-markdown"><img src="https://img.shields.io/npm/dm/@rbbtsn0w/wechat-markdown?style=flat-square&color=success" alt="Downloads" /></a>
-  <a href="https://github.com/RbBtSn0w/wechat-markdown/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-ISC-green.svg?style=flat-square" alt="License" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-ISC-green.svg?style=flat-square" alt="License" /></a>
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.x-blue?style=flat-square&logo=typescript" alt="TypeScript" /></a>
 </p>
 
@@ -28,18 +28,18 @@
 
 ## 📑 Table of Contents
 
-- [🌟 Highlights](#-highlights)
-- [📦 Installation](#-installation)
-- [🚀 Quick Start](#-quick-start)
+- [🌟 Highlights](#highlights)
+- [📦 Installation](#installation)
+- [🚀 Quick Start](#quick-start)
   - [Functional API](#functional-api)
   - [Class-based Engine](#class-based-engine)
-- [🎨 Theming System: Two Layers](#-theming-system-two-layers)
-  - [Passing Themes Inline](#passing-a-theme-without-touching-the-global-registry)
-- [🔌 Extensibility: Injecting Render Services](#-extensibility-injecting-render-services)
-- [🚢 Release Workflow](#-release-workflow)
-- [🧪 Testing & Verification](#-testing--verification)
-- [🛠️ Build](#️-build)
-- [📄 License](#-license)
+- [🎨 Theming: Two Layers](#theming-two-layers)
+  - [Passing a Theme Without Touching the Global Registry](#passing-a-theme-without-touching-the-global-registry)
+- [🔌 Injecting Render Services](#injecting-render-services)
+- [🚢 Release Workflow](#release-workflow)
+- [🧪 Testing & Verification](#testing--verification)
+- [🛠️ Build](#build)
+- [📄 License](#license)
 
 ---
 
@@ -81,26 +81,6 @@ For GitHub Packages, add the scope-specific registry to `.npmrc` before installi
 ```bash
 npm install @rbbtsn0w/wechat-markdown
 ```
-
-## Releasing
-
-Releases from `main` publish to npm using trusted publishing and GitHub Packages using `GITHUB_TOKEN`. A package that has never been published to npm must be bootstrapped manually because it has no npm settings page yet:
-
-```bash
-npm login
-npm whoami
-npm publish --dry-run --access public
-npm publish --access public
-```
-
-After that first publish succeeds, configure the package's trusted publisher on npmjs.com with:
-
-- GitHub user: `RbBtSn0w`
-- Repository: `wechat-markdown`
-- Workflow: `release.yml`
-- Allowed action: `npm publish`
-
-The workflow uses GitHub Actions OIDC and requires no npm publish token. Future releases from this public repository automatically create npm provenance attestations.
 
 ## 🚀 Quick Start
 
@@ -148,7 +128,7 @@ const engine = new WechatMarkdownEngine();
 const result = await engine.render(markdown, { theme: 'grace' });
 ```
 
-## 🎨 Theming: two layers
+## 🎨 Theming: Two Layers
 
 Styling is applied in two layers, concatenated in this order before `juice`
 inlines them:
@@ -178,7 +158,7 @@ Each capability's base CSS is exported (`codeDecoratorBaseCss`,
 `alertsBaseCss`, `tableScrollerBaseCss`, `footnotesBaseCss`, `formulaBaseCss`,
 `mermaidBaseCss`) if you want to read the baseline you are overriding.
 
-### Passing a theme without touching the global registry
+### Passing a Theme Without Touching the Global Registry
 
 `registerTheme(name, css)` mutates a process-global registry, so two consumers
 in one process overwrite each other. Prefer passing the config inline:
@@ -192,7 +172,7 @@ const result = await renderMarkdownToWechat(markdown, { theme: brand });
 
 Unknown theme names fall back to `tech` rather than throwing.
 
-## 🔌 Injecting render services
+## 🔌 Injecting Render Services
 
 The engine owns the _orchestration_ of formulas and diagrams (finding them,
 substituting an `<img>`, counting, emitting diagnostics). It does not need to
@@ -218,6 +198,26 @@ path, a `data:` URI, and an already-uploaded CDN URL are all valid. Omit
 `services` to use the built-in MathJax and Kroki renderers.
 
 For plain (non-generated) images, use the `resolveImage` hook instead.
+
+## 🚢 Release Workflow
+
+Releases from `main` publish to npm using trusted publishing and GitHub Packages using `GITHUB_TOKEN`. A package that has never been published to npm must be bootstrapped manually because it has no npm settings page yet:
+
+```bash
+npm login
+npm whoami
+npm publish --dry-run --access public
+npm publish --access public
+```
+
+After that first publish succeeds, configure the package's trusted publisher on npmjs.com with:
+
+- GitHub user: `RbBtSn0w`
+- Repository: `wechat-markdown`
+- Workflow: `release.yml`
+- Allowed action: `npm publish`
+
+The workflow uses GitHub Actions OIDC and requires no npm publish token. Future releases from this public repository automatically create npm provenance attestations.
 
 ## 🧪 Testing & Verification
 
