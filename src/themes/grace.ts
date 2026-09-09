@@ -69,7 +69,24 @@ export const graceTheme = `
   padding: 14px 16px;
   border-radius: 6px;
   overflow-x: auto;
+  white-space: pre !important;
+  word-break: normal !important;
+  word-wrap: normal !important;
+  display: block !important;
+  -webkit-overflow-scrolling: touch;
   margin: 1.2em 0;
+}
+
+.markdown-body pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0 !important;
+  border: none !important;
+  font-size: inherit !important;
+  display: block !important;
+  white-space: pre !important;
+  word-break: normal !important;
+  word-wrap: normal !important;
 }
 
 .markdown-body table {

@@ -63,6 +63,10 @@ export interface RenderOptions {
   gfmAlerts?: boolean;
   renderMath?: boolean;
   renderMermaid?: boolean;
+  highlightTheme?: 'atom-one-dark' | 'github-light' | 'monokai' | string;
+  showLineNumber?: boolean;
+  taskLists?: boolean;
+  imageFigures?: boolean;
   resolveImage?: ImageResolver;
 }
 

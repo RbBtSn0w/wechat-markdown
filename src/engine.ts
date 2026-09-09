@@ -14,8 +14,11 @@ import {
   footnotesBaseCss,
 } from './plugins/footnotes';
 import { decorateCodeBlocks, codeDecoratorBaseCss } from './plugins/code-decorator';
+import { highlightCode, getHighlightCss } from './plugins/highlighter';
 import { wrapTablesWithScroller, tableScrollerBaseCss } from './plugins/table-scroller';
 import { processGfmAlerts, alertsBaseCss } from './plugins/alerts';
+import { processTaskLists, taskListBaseCss } from './plugins/task-list';
+import { processImageFigures, imageFigureBaseCss } from './plugins/image-figure';
 import { FormulaRenderer } from './media/formula';
 import { MermaidRenderer } from './media/mermaid';
 import { formulaBaseCss, mermaidBaseCss } from './media/styles';
@@ -196,6 +199,10 @@ export class WechatMarkdownEngine {
       macCodeBlock = true,
       tableScroller = true,
       gfmAlerts = true,
+      taskLists = true,
+      imageFigures = true,
+      highlightTheme = 'atom-one-dark',
+      showLineNumber = false,
       renderMath = true,
       renderMermaid = true,
       resolveImage,
@@ -267,10 +274,23 @@ export class WechatMarkdownEngine {
       mermaidCount = mermaidResult.count;
     }
 
-    // 6. Parse Markdown to HTML via marked
+    // Base code highlighting CSS
+    baseCss.push(getHighlightCss(highlightTheme));
+
+    // 6. Parse Markdown to HTML via marked with syntax highlighting
+    const markedRenderer = new marked.Renderer();
+    markedRenderer.code = (code: string, infostring?: string) => {
+      const lang = (infostring || '').match(/^\S*/)?.[0] || '';
+      const { highlighted, language } = highlightCode(code, lang, showLineNumber);
+      const safeLang = escapeHtmlAttribute(language.replace(/[^\w#+.-]/g, ''));
+      const langClass = safeLang && safeLang !== 'plaintext' ? ` class="language-${safeLang} hljs"` : ' class="hljs"';
+      return `<pre><code${langClass}>${highlighted}</code></pre>\n`;
+    };
+
     let rawHtml = await marked.parse(workingMarkdown, {
       gfm: true,
       breaks: false,
+      renderer: markedRenderer,
     });
 
     // 7. Process GFM Alerts
@@ -279,19 +299,31 @@ export class WechatMarkdownEngine {
       rawHtml = processGfmAlerts(rawHtml, true);
     }
 
-    // 8. Decorate Code Blocks (Mac Style)
+    // 8. Process GFM Task Lists / Checkboxes
+    if (taskLists) {
+      baseCss.push(taskListBaseCss);
+      rawHtml = processTaskLists(rawHtml, true);
+    }
+
+    // 9. Decorate Code Blocks (Mac Style)
     if (macCodeBlock) {
       baseCss.push(codeDecoratorBaseCss);
       rawHtml = decorateCodeBlocks(rawHtml, true);
     }
 
-    // 9. Wrap Tables in Scroller
+    // 10. Wrap Tables in Scroller
     if (tableScroller) {
       baseCss.push(tableScrollerBaseCss);
       rawHtml = wrapTablesWithScroller(rawHtml, true);
     }
 
-    // 10. Append Footnotes HTML
+    // 11. Wrap Images in Figures with Captions
+    if (imageFigures) {
+      baseCss.push(imageFigureBaseCss);
+      rawHtml = processImageFigures(rawHtml, true);
+    }
+
+    // 12. Append Footnotes HTML
     if (footnotes.length > 0) {
       rawHtml += '\n' + renderFootnotesHtml(footnotes);
     }

@@ -247,3 +247,10 @@ npm run build
 ## 📄 License
 
 ISC © [RbBtSn0w](https://github.com/RbBtSn0w)
+
+## 🙏 Acknowledgements
+
+- [doocs/md](https://github.com/doocs/md) (MIT License) - Industry standard WeChat Markdown editor inspiring our syntax highlighting styles and WeChat Webview layout hardening rules.
+- [highlight.js](https://highlightjs.org/) (BSD 3-Clause) - Universal code syntax highlighter.
+- [juice](https://github.com/Automattic/juice) (MIT License) - CSS inliner for HTML emails and WeChat articles.
+
