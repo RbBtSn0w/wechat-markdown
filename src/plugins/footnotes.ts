@@ -57,6 +57,10 @@ export function processMarkdownFootnotes(markdown: string, siteUrl?: string): Pr
     if (url.startsWith('#') || url.startsWith('javascript:') || url.startsWith('mailto:')) {
       return false;
     }
+    // WeChat allows internal article links on mp.weixin.qq.com natively
+    if (/^https?:\/\/([a-zA-Z0-9-]+\.)*mp\.weixin\.qq\.com(\/|$)/i.test(url)) {
+      return false;
+    }
     if (siteUrl && url.startsWith(siteUrl)) {
       return false;
     }

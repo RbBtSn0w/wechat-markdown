@@ -282,3 +282,114 @@ describe('theme resolution', () => {
     expect(result.html).toContain('#0f4c81');
   });
 });
+
+describe('code block formatting stability', () => {
+  it('enforces white-space: pre and horizontal scrolling on decorated code blocks', async () => {
+    const md = '```typescript\nconst message: string = "Hello WeChat";\nconsole.log(message);\n```';
+    const result = await renderMarkdownToWechat(md, {
+      theme: 'tech',
+      renderMath: false,
+      renderMermaid: false,
+      macCodeBlock: true,
+    });
+
+    const preStyle = styleOf(result.html, 'pre');
+    expect(preStyle).toContain('white-space: pre');
+    expect(preStyle).toContain('overflow-x: auto');
+    expect(preStyle).toContain('word-break: normal');
+    expect(preStyle).toContain('-webkit-overflow-scrolling: touch');
+
+    const codeStyle = styleOf(result.html, 'code');
+    expect(codeStyle).toContain('white-space: pre');
+    expect(codeStyle).toContain('background-color: transparent');
+  });
+
+  it('preserves pre white-space and overflow even when macCodeBlock is false', async () => {
+    const md = '```typescript\nconst a = 1;\n```';
+    const result = await renderMarkdownToWechat(md, {
+      theme: 'tech',
+      renderMath: false,
+      renderMermaid: false,
+      macCodeBlock: false,
+    });
+
+    const preStyle = styleOf(result.html, 'pre');
+    expect(preStyle).toContain('white-space: pre');
+    expect(preStyle).toContain('overflow-x: auto');
+    expect(preStyle).toContain('word-break: normal');
+  });
+
+  it('keeps inline code distinct from code block formatting', async () => {
+    const md = 'Use `let x = 1` inside text.\n\n```swift\nlet y = 2\n```';
+    const result = await renderMarkdownToWechat(md, {
+      theme: 'tech',
+      renderMath: false,
+      renderMermaid: false,
+      macCodeBlock: true,
+    });
+
+    // Inline code in paragraph should have non-transparent background and inline color
+    const inlineMatch = /<p[^>]*>.*?<code\s+style="([^"]*)"[^>]*>let x = 1<\/code>/.exec(result.html);
+    const inlineCodeStyle = inlineMatch?.[1] ?? '';
+    expect(inlineCodeStyle).toContain('background-color: #f3f6f9');
+    expect(inlineCodeStyle).toContain('color: #c7254e');
+  });
+
+  it('inlines syntax highlighting token colors into style attributes without leaking class names', async () => {
+    const md = '```typescript\nfunction solve(problem: string): boolean {\n  return true;\n}\n```';
+    const result = await renderMarkdownToWechat(md, {
+      theme: 'tech',
+      renderMath: false,
+      renderMermaid: false,
+      macCodeBlock: true,
+    });
+
+    // Contains inlined keyword styling (#c678dd for function/return/boolean)
+    expect(result.html).toContain('#c678dd');
+    // All classes should be cleaned up by cleanWechatAttributes
+    expect(result.html).not.toContain('class="hljs');
+    expect(result.html).not.toContain('class="language-');
+  });
+
+  it('supports alternate highlight themes like github-light', async () => {
+    const md = '```typescript\nconst status = "ok";\n```';
+    const result = await renderMarkdownToWechat(md, {
+      theme: 'tech',
+      highlightTheme: 'github-light',
+      renderMath: false,
+      renderMermaid: false,
+    });
+
+    // github-light string color is #032f62
+    expect(result.html).toContain('#032f62');
+  });
+
+  it('renders GFM task lists into styled bulletproof checkboxes', async () => {
+    const md = '- [x] Release 1.2\n- [ ] Release 1.3';
+    const result = await renderMarkdownToWechat(md, {
+      renderMath: false,
+      renderMermaid: false,
+    });
+
+    expect(result.html).not.toContain('<input');
+    // Checked checkbox has green background #07c160 and checkmark
+    expect(result.html).toContain('background-color: #07c160');
+    expect(result.html).toContain('✓');
+    // Unchecked checkbox has border
+    expect(result.html).toContain('border: 1.5px solid #888888');
+  });
+
+  it('wraps standalone images in styled figures with captions', async () => {
+    const md = '![Architecture](https://example.com/arch.png "System Overview")';
+    const result = await renderMarkdownToWechat(md, {
+      renderMath: false,
+      renderMermaid: false,
+    });
+
+    expect(result.html).toContain('System Overview');
+    expect(result.html).toContain('text-align: center');
+  });
+});
+
+
+
