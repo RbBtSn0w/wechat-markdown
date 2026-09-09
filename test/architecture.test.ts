@@ -301,7 +301,7 @@ describe('code block formatting stability', () => {
 
     const codeStyle = styleOf(result.html, 'code');
     expect(codeStyle).toContain('white-space: pre');
-    expect(codeStyle).toContain('background-color: transparent');
+    expect(codeStyle).toContain('background-color: #282c34');
   });
 
   it('preserves pre white-space and overflow even when macCodeBlock is false', async () => {
@@ -349,6 +349,36 @@ describe('code block formatting stability', () => {
     // All classes should be cleaned up by cleanWechatAttributes
     expect(result.html).not.toContain('class="hljs');
     expect(result.html).not.toContain('class="language-');
+  });
+
+  it('prevents HTML/CSS attribute injection from crafted code-fence info strings', async () => {
+    const md = '```ts" style="color:red;font-size:99px" malicious\nconst x = 1;\n```';
+    const result = await renderMarkdownToWechat(md, {
+      theme: 'tech',
+      renderMath: false,
+      renderMermaid: false,
+      macCodeBlock: true,
+    });
+
+    // Malicious attribute breakout must be prevented
+    expect(result.html).not.toContain('font-size:99px');
+    expect(result.html).not.toContain('font-size: 99px');
+    expect(result.html).not.toContain('malicious');
+  });
+
+  it('inlines github-light theme colors onto code elements without dark background conflict', async () => {
+    const md = '```typescript\nconst lightMode: boolean = true;\n```';
+    const result = await renderMarkdownToWechat(md, {
+      theme: 'tech',
+      highlightTheme: 'github-light',
+      renderMath: false,
+      renderMermaid: false,
+      macCodeBlock: true,
+    });
+
+    const codeStyle = styleOf(result.html, 'code');
+    expect(codeStyle).toContain('background-color: #f6f8fa');
+    expect(codeStyle).toContain('color: #24292e');
   });
 
   it('supports alternate highlight themes like github-light', async () => {

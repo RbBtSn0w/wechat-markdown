@@ -112,8 +112,8 @@ export const techTheme = `
 }
 
 .markdown-body pre code {
-  background-color: transparent !important;
-  color: inherit !important;
+  background: transparent;
+  color: inherit;
   padding: 0 !important;
   border: none !important;
   font-size: inherit !important;

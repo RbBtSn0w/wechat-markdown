@@ -156,6 +156,8 @@ describe('Plugins Test Suite', () => {
       expect(highlighted).toContain('2');
       expect(highlighted).toContain('3');
       expect(highlighted).toContain('<br/>');
+      expect(highlighted).not.toContain('<section');
+      expect(highlighted).toContain('<span class="code-line-numbers"');
     });
   });
 

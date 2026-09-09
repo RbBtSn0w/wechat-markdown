@@ -180,12 +180,9 @@ echo "\${{ secrets.GITHUB_TOKEN }}"
 
   describe('6. Entire Blog Corpus (76 Posts) Full Regression Test', () => {
     const postsDir = path.resolve(__dirname, '../../rbbtsn0w.github.io/_posts');
+    const hasPosts = fs.existsSync(postsDir);
 
-    it('renders all blog posts without throwing or generating broken code tags', async () => {
-      if (!fs.existsSync(postsDir)) {
-        return; // skip if blog directory is not adjacent
-      }
-
+    it.skipIf(!hasPosts)('renders all blog posts without throwing or generating broken code tags', async () => {
       const files = fs.readdirSync(postsDir).filter((f) => f.endsWith('.md'));
       expect(files.length).toBeGreaterThanOrEqual(70);
 

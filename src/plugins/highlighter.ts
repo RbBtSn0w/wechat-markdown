@@ -13,7 +13,7 @@ import hljs from "highlight.js";
 export type HighlightThemeName = "atom-one-dark" | "github-light" | "monokai";
 
 export const atomOneDarkCss = `
-.hljs { color: #abb2bf; background: #282c34; }
+.markdown-body pre code.hljs, .mac-code-wrapper pre code.hljs, code.hljs, .hljs { color: #abb2bf; background: #282c34; background-color: #282c34; }
 .hljs-comment, .hljs-quote { color: #5c6370; font-style: italic; }
 .hljs-doctag, .hljs-keyword, .hljs-formula { color: #c678dd; font-weight: bold; }
 .hljs-section, .hljs-name, .hljs-selector-tag, .hljs-deletion, .hljs-subst { color: #e06c75; }
@@ -27,7 +27,7 @@ export const atomOneDarkCss = `
 `;
 
 export const githubLightCss = `
-.hljs { color: #24292e; background: #f6f8fa; }
+.markdown-body pre code.hljs, .mac-code-wrapper pre code.hljs, code.hljs, .hljs { color: #24292e; background: #f6f8fa; background-color: #f6f8fa; }
 .hljs-comment, .hljs-quote { color: #6a737d; font-style: italic; }
 .hljs-doctag, .hljs-keyword, .hljs-formula { color: #d73a49; font-weight: bold; }
 .hljs-section, .hljs-name, .hljs-selector-tag, .hljs-deletion, .hljs-subst { color: #d73a49; }
@@ -41,7 +41,7 @@ export const githubLightCss = `
 `;
 
 export const monokaiCss = `
-.hljs { color: #f8f8f2; background: #272822; }
+.markdown-body pre code.hljs, .mac-code-wrapper pre code.hljs, code.hljs, .hljs { color: #f8f8f2; background: #272822; background-color: #272822; }
 .hljs-comment, .hljs-quote { color: #75715e; font-style: italic; }
 .hljs-doctag, .hljs-keyword, .hljs-formula { color: #f92672; font-weight: bold; }
 .hljs-section, .hljs-name, .hljs-selector-tag, .hljs-deletion, .hljs-subst { color: #f92672; }
@@ -148,16 +148,16 @@ export function formatHighlightedCode(rawHtml: string, showLineNumber: boolean =
   const lines = splitHighlightedHtmlByLines(rawHtml).map(formatCodeLine);
   if (showLineNumber && lines.length > 0) {
     const lineNumbersHtml = lines
-      .map((_, idx) => `<section style="line-height: 1.6; padding: 0 8px 0 0; text-align: right;">${idx + 1}</section>`)
+      .map((_, idx) => `<span style="display: block; line-height: 1.6; padding: 0 8px 0 0; text-align: right;">${idx + 1}</span>`)
       .join('');
     const codeContentHtml = lines.join('<br/>');
     return `
-<section style="display: flex; align-items: flex-start; width: 100%; box-sizing: border-box;">
-  <section class="code-line-numbers" style="padding: 0 10px 0 0; border-right: 1px solid rgba(255, 255, 255, 0.1); user-select: none; color: #5c6370; font-size: inherit; font-family: inherit;">${lineNumbersHtml}</section>
-  <section class="code-scroll" style="flex: 1 1 auto; overflow-x: auto; padding-left: 12px; min-width: 0;">
+<span style="display: flex; align-items: flex-start; width: 100%; box-sizing: border-box;">
+  <span class="code-line-numbers" style="display: block; padding: 0 10px 0 0; border-right: 1px solid rgba(255, 255, 255, 0.1); user-select: none; color: #5c6370; font-size: inherit; font-family: inherit;">${lineNumbersHtml}</span>
+  <span class="code-scroll" style="display: block; flex: 1 1 auto; overflow-x: auto; padding-left: 12px; min-width: 0;">
     <span class="code-block__inner" style="display: block;">${codeContentHtml}</span>
-  </section>
-</section>`.trim();
+  </span>
+</span>`.trim();
   }
   return `<span class="code-block__inner" style="display: block;">${lines.join('<br/>')}</span>`;
 }
@@ -170,7 +170,7 @@ export function highlightCode(
   rawLang?: string,
   showLineNumber: boolean = false
 ): { highlighted: string; language: string } {
-  const cleanLang = (rawLang || '').trim().toLowerCase();
+  const cleanLang = (rawLang || '').trim().toLowerCase().match(/^[a-zA-Z0-9_#+.-]+/)?.[0] || '';
   const normalizedCode = code.replace(/\r\n?/g, '\n');
 
   // Try explicit language match

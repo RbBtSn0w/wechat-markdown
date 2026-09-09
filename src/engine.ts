@@ -282,7 +282,8 @@ export class WechatMarkdownEngine {
     markedRenderer.code = (code: string, infostring?: string) => {
       const lang = (infostring || '').match(/^\S*/)?.[0] || '';
       const { highlighted, language } = highlightCode(code, lang, showLineNumber);
-      const langClass = language && language !== 'plaintext' ? ` class="language-${language} hljs"` : ' class="hljs"';
+      const safeLang = escapeHtmlAttribute(language.replace(/[^\w#+.-]/g, ''));
+      const langClass = safeLang && safeLang !== 'plaintext' ? ` class="language-${safeLang} hljs"` : ' class="hljs"';
       return `<pre><code${langClass}>${highlighted}</code></pre>\n`;
     };
 

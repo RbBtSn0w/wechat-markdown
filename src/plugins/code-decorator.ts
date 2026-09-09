@@ -48,8 +48,8 @@ export const codeDecoratorBaseCss = `
 .mac-code-wrapper pre {
   margin: 0 !important;
   padding: 14px 16px !important;
-  background-color: #282c34 !important;
-  color: #abb2bf !important;
+  background-color: #282c34;
+  color: #abb2bf;
   font-family: Consolas, Monaco, Menlo, "Courier New", monospace !important;
   font-size: 13px !important;
   line-height: 1.6 !important;
@@ -64,9 +64,6 @@ export const codeDecoratorBaseCss = `
 .mac-code-wrapper pre code {
   font-family: inherit !important;
   font-size: inherit !important;
-  color: inherit !important;
-  background: transparent !important;
-  background-color: transparent !important;
   padding: 0 !important;
   border: none !important;
   border-radius: 0 !important;
@@ -164,6 +161,7 @@ export function decorateCodeBlocks(html: string, enabled: boolean = true): strin
 
   return html.replace(preRegex, (match, rawClass, codeContent) => {
     const displayLang = formatDisplayLanguage(rawClass);
+    const codeClassAttr = rawClass ? ` class="${rawClass}"` : '';
     return `
 <section class="mac-code-wrapper">
   <section class="mac-code-header">
@@ -174,7 +172,7 @@ export function decorateCodeBlocks(html: string, enabled: boolean = true): strin
     </section>
     <span class="mac-code-lang">${displayLang}</span>
   </section>
-  <pre><code>${codeContent}</code></pre>
+  <pre><code${codeClassAttr}>${codeContent}</code></pre>
 </section>
 `.trim();
   });
