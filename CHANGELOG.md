@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/RbBtSn0w/wechat-markdown/compare/v1.3.0...v1.4.0) (2026-09-11)
+
+
+### Features
+
+* **release:** scheduled release from develop (2026-09-11) ([#21](https://github.com/RbBtSn0w/wechat-markdown/issues/21)) ([08ab78c](https://github.com/RbBtSn0w/wechat-markdown/commit/08ab78cf94217247d1a5de4d20e065638f922ce6)), closes [#10](https://github.com/RbBtSn0w/wechat-markdown/issues/10) [#9](https://github.com/RbBtSn0w/wechat-markdown/issues/9) [#11](https://github.com/RbBtSn0w/wechat-markdown/issues/11) [#12](https://github.com/RbBtSn0w/wechat-markdown/issues/12) [#14](https://github.com/RbBtSn0w/wechat-markdown/issues/14) [#18](https://github.com/RbBtSn0w/wechat-markdown/issues/18) [#20](https://github.com/RbBtSn0w/wechat-markdown/issues/20) [#19](https://github.com/RbBtSn0w/wechat-markdown/issues/19)
+
 # [1.3.0](https://github.com/RbBtSn0w/wechat-markdown/compare/v1.2.0...v1.3.0) (2026-09-06)
 
 
