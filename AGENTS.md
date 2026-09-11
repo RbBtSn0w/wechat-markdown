@@ -114,6 +114,8 @@ When authoring or modifying GitHub Actions workflows or automation scripts, agen
    - All `npm publish` calls in automated workflows must include `--ignore-scripts` to block lifecycle script code execution during packaging.
 4. **Unambiguous Timezones**:
    - Never use ambiguous timezone abbreviations (e.g. CST). Always pair UTC crons with explicit Beijing time comments (e.g. `# Every Friday at 15:00 Beijing time (UTC+8) -> 07:00 UTC`).
+5. **No Direct Secret References in Step Conditions**:
+   - Never reference `secrets.*` directly inside step-level `if:` conditions (e.g. `if: secrets.MY_SECRET != ''`). In GitHub Actions, secrets are not populated in untrusted trigger contexts (such as fork pull requests) and referencing them directly in expressions can lead to unexpected evaluation behavior or silent skips. Pass secrets via `env:` and check presence within the shell runner (e.g. `if [ -z "$MY_SECRET" ]; then exit 0; fi`).
 
 ---
 
