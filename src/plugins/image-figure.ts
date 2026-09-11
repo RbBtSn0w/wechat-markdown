@@ -36,7 +36,8 @@ export function processImageFigures(html: string, enabled: boolean = true): stri
 
   // Find paragraphs that contain only an image: <p><img ...></p>
   // Avoid formulas and mermaid figures that already have special classes
-  const pImgRegex = /<p>(\s*<img\b(?![^>]*(?:wm-formula|wm-mermaid))[^>]*src="([^"]+)"[^>]*>)\s*<\/p>/gi;
+  const pImgRegex =
+    /<p>(\s*<img\b(?![^>]*(?:wm-formula|wm-mermaid))[^>]*src="([^"]+)"[^>]*>)\s*<\/p>/gi;
 
   return html.replace(pImgRegex, (match, fullImgTag) => {
     // Extract title or alt
@@ -44,7 +45,7 @@ export function processImageFigures(html: string, enabled: boolean = true): stri
     const altMatch = fullImgTag.match(/\balt="([^"]+)"/i);
     const captionText = titleMatch?.[1] || altMatch?.[1];
 
-    if (captionText && captionText.trim() && !captionText.includes("http")) {
+    if (captionText && captionText.trim() && !captionText.includes('http')) {
       return `<p class="wm-image-figure">${fullImgTag}<span class="wm-image-caption">${captionText.trim()}</span></p>`;
     }
 

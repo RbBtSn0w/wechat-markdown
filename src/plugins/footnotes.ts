@@ -48,7 +48,10 @@ export interface ProcessFootnotesResult {
   footnotes: FootnoteItem[];
 }
 
-export function processMarkdownFootnotes(markdown: string, siteUrl?: string): ProcessFootnotesResult {
+export function processMarkdownFootnotes(
+  markdown: string,
+  siteUrl?: string,
+): ProcessFootnotesResult {
   const footnotes: FootnoteItem[] = [];
   const urlMap = new Map<string, number>();
 
