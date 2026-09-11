@@ -30,9 +30,7 @@ const themeRegistry: Record<string, ThemeConfig> = {
  */
 export function getTheme(theme: string | ThemeConfig = 'tech', customCss?: string): string {
   const selected =
-    typeof theme === 'string'
-      ? themeRegistry[theme.toLowerCase()] || themeRegistry.tech
-      : theme;
+    typeof theme === 'string' ? themeRegistry[theme.toLowerCase()] || themeRegistry.tech : theme;
   if (customCss) {
     return `${selected.css}\n${customCss}`;
   }

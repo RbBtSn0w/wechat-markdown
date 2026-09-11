@@ -329,7 +329,9 @@ describe('code block formatting stability', () => {
     });
 
     // Inline code in paragraph should have non-transparent background and inline color
-    const inlineMatch = /<p[^>]*>.*?<code\s+style="([^"]*)"[^>]*>let x = 1<\/code>/.exec(result.html);
+    const inlineMatch = /<p[^>]*>.*?<code\s+style="([^"]*)"[^>]*>let x = 1<\/code>/.exec(
+      result.html,
+    );
     const inlineCodeStyle = inlineMatch?.[1] ?? '';
     expect(inlineCodeStyle).toContain('background-color: #f3f6f9');
     expect(inlineCodeStyle).toContain('color: #c7254e');
@@ -420,6 +422,3 @@ describe('code block formatting stability', () => {
     expect(result.html).toContain('text-align: center');
   });
 });
-
-
-

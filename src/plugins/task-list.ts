@@ -55,7 +55,10 @@ export function processTaskLists(html: string, enabled: boolean = true): string 
   processed = processed.replace(uncheckedRegex, `<span class="task-checkbox-unchecked"></span>`);
 
   // 3. Mark parent li with task-list-item class to remove default bullet
-  processed = processed.replace(/<li>(\s*<span class="task-checkbox-(?:checked|unchecked)">)/g, `<li class="task-list-item">$1`);
+  processed = processed.replace(
+    /<li>(\s*<span class="task-checkbox-(?:checked|unchecked)">)/g,
+    `<li class="task-list-item">$1`,
+  );
 
   return processed;
 }

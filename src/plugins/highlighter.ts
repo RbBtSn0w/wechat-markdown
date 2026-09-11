@@ -8,9 +8,9 @@
  * spans that are subsequently inlined by Juice into safe, bulletproof WeChat inline styles.
  */
 
-import hljs from "highlight.js";
+import hljs from 'highlight.js';
 
-export type HighlightThemeName = "atom-one-dark" | "github-light" | "monokai";
+export type HighlightThemeName = 'atom-one-dark' | 'github-light' | 'monokai';
 
 export const atomOneDarkCss = `
 .markdown-body pre code.hljs, .mac-code-wrapper pre code.hljs, code.hljs, .hljs { color: #abb2bf; background: #282c34; background-color: #282c34; }
@@ -58,11 +58,11 @@ export const highlightBaseCss = atomOneDarkCss;
 
 export function getHighlightCss(themeName?: HighlightThemeName | string): string {
   switch (themeName) {
-    case "github-light":
+    case 'github-light':
       return githubLightCss;
-    case "monokai":
+    case 'monokai':
       return monokaiCss;
-    case "atom-one-dark":
+    case 'atom-one-dark':
     default:
       return atomOneDarkCss;
   }
@@ -70,11 +70,11 @@ export function getHighlightCss(themeName?: HighlightThemeName | string): string
 
 function escapeHtml(text: string): string {
   return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/\x27/g, "&#39;");
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/\x27/g, '&#39;');
 }
 
 /**
@@ -135,7 +135,10 @@ export function formatCodeLine(lineHtml: string): string {
     return text.replace(/ {2,}/g, (m: string) => '&nbsp;'.repeat(m.length));
   });
   // Match leading spaces, even if preceded by open tags like <span ...>
-  formatted = formatted.replace(/^((?:<[^>]+>)*)( +)/, (_, tags, spaces) => tags + '&nbsp;'.repeat(spaces.length));
+  formatted = formatted.replace(
+    /^((?:<[^>]+>)*)( +)/,
+    (_, tags, spaces) => tags + '&nbsp;'.repeat(spaces.length),
+  );
   return formatted === '' ? '&nbsp;' : formatted;
 }
 
@@ -148,7 +151,10 @@ export function formatHighlightedCode(rawHtml: string, showLineNumber: boolean =
   const lines = splitHighlightedHtmlByLines(rawHtml).map(formatCodeLine);
   if (showLineNumber && lines.length > 0) {
     const lineNumbersHtml = lines
-      .map((_, idx) => `<span style="display: block; line-height: 1.6; padding: 0 8px 0 0; text-align: right;">${idx + 1}</span>`)
+      .map(
+        (_, idx) =>
+          `<span style="display: block; line-height: 1.6; padding: 0 8px 0 0; text-align: right;">${idx + 1}</span>`,
+      )
       .join('');
     const codeContentHtml = lines.join('<br/>');
     return `
@@ -168,16 +174,23 @@ export function formatHighlightedCode(rawHtml: string, showLineNumber: boolean =
 export function highlightCode(
   code: string,
   rawLang?: string,
-  showLineNumber: boolean = false
+  showLineNumber: boolean = false,
 ): { highlighted: string; language: string } {
-  const cleanLang = (rawLang || '').trim().toLowerCase().match(/^[a-zA-Z0-9_#+.-]+/)?.[0] || '';
+  const cleanLang =
+    (rawLang || '')
+      .trim()
+      .toLowerCase()
+      .match(/^[a-zA-Z0-9_#+.-]+/)?.[0] || '';
   const normalizedCode = code.replace(/\r\n?/g, '\n');
 
   // Try explicit language match
   if (cleanLang && hljs.getLanguage(cleanLang)) {
     try {
       const result = hljs.highlight(normalizedCode, { language: cleanLang, ignoreIllegals: true });
-      return { highlighted: formatHighlightedCode(result.value, showLineNumber), language: cleanLang };
+      return {
+        highlighted: formatHighlightedCode(result.value, showLineNumber),
+        language: cleanLang,
+      };
     } catch {
       // Fallback
     }
@@ -188,7 +201,10 @@ export function highlightCode(
     try {
       const auto = hljs.highlightAuto(normalizedCode);
       if (auto.language && auto.relevance > 3) {
-        return { highlighted: formatHighlightedCode(auto.value, showLineNumber), language: auto.language };
+        return {
+          highlighted: formatHighlightedCode(auto.value, showLineNumber),
+          language: auto.language,
+        };
       }
     } catch {
       // Fallback

@@ -20,7 +20,10 @@ export class FormulaRenderer {
   }
 
   getHash(expression: string, display: boolean): string {
-    return crypto.createHash('sha256').update(`${display ? 'display' : 'inline'}:${expression}`).digest('hex');
+    return crypto
+      .createHash('sha256')
+      .update(`${display ? 'display' : 'inline'}:${expression}`)
+      .digest('hex');
   }
 
   getTargetPath(hash: string): string {

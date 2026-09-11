@@ -61,7 +61,8 @@ export function processGfmAlerts(html: string, enabled: boolean = true): string 
   };
 
   // Matches blockquotes containing [!NOTE], [!TIP], etc.
-  const blockquoteRegex = /<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*([\s\S]*?)<\/p>([\s\S]*?)<\/blockquote>/gi;
+  const blockquoteRegex =
+    /<blockquote>\s*<p>\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*([\s\S]*?)<\/p>([\s\S]*?)<\/blockquote>/gi;
 
   return html.replace(blockquoteRegex, (match, typeUpper, firstLineText, restContent) => {
     const type = typeUpper.toUpperCase();

@@ -25,6 +25,11 @@ jobs:
         id: check_diff
         run: |
           git fetch origin main:main
+          if git diff --quiet main develop; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No code changes between develop and main. Skipping PR creation."
+            exit 0
+          fi
           AHEAD_COUNT="$(git rev-list --count main..develop)"
           echo "Commits on develop ahead of main: ${AHEAD_COUNT}"
           if [ "${AHEAD_COUNT}" -eq 0 ]; then
@@ -41,7 +46,13 @@ jobs:
           GH_NO_PROMPT: '1'
         run: |
           DATE="$(date -u +'%Y-%m-%d')"
-          PR_TITLE="chore(release): scheduled release from develop (${DATE})"
+          if git log origin/main..develop | grep -Eq '^[ ]*(\* )?feat(\(.+\))?:'; then
+            PR_TITLE="feat(release): scheduled release from develop (${DATE})"
+          elif git log origin/main..develop | grep -Eq '^[ ]*(\* )?fix(\(.+\))?:'; then
+            PR_TITLE="fix(release): scheduled release from develop (${DATE})"
+          else
+            PR_TITLE="chore(release): scheduled release from develop (${DATE})"
+          fi
           BODY_FILE="$(mktemp)"
           cleanup() { rm -f "$BODY_FILE"; }
           trap cleanup EXIT
