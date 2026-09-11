@@ -157,7 +157,8 @@ export function decorateCodeBlocks(html: string, enabled: boolean = true): strin
 
   // Regex to match <pre...><code...>...</code></pre> across multiple formatting variations
   // (with or without language classes, titles, or custom attributes)
-  const preRegex = /<pre\b[^>]*><code(?:\s+[^>]*class=["']([^"']+)["'][^>]*|[^>]*)>([\s\S]*?)<\/code><\/pre>/gi;
+  const preRegex =
+    /<pre\b[^>]*><code(?:\s+[^>]*class=["']([^"']+)["'][^>]*|[^>]*)>([\s\S]*?)<\/code><\/pre>/gi;
 
   return html.replace(preRegex, (match, rawClass, codeContent) => {
     const displayLang = formatDisplayLanguage(rawClass);

@@ -182,34 +182,37 @@ echo "\${{ secrets.GITHUB_TOKEN }}"
     const postsDir = path.resolve(__dirname, '../../rbbtsn0w.github.io/_posts');
     const hasPosts = fs.existsSync(postsDir);
 
-    it.skipIf(!hasPosts)('renders all blog posts without throwing or generating broken code tags', async () => {
-      const files = fs.readdirSync(postsDir).filter((f) => f.endsWith('.md'));
-      expect(files.length).toBeGreaterThanOrEqual(70);
+    it.skipIf(!hasPosts)(
+      'renders all blog posts without throwing or generating broken code tags',
+      async () => {
+        const files = fs.readdirSync(postsDir).filter((f) => f.endsWith('.md'));
+        expect(files.length).toBeGreaterThanOrEqual(70);
 
-      for (const file of files) {
-        const fullPath = path.join(postsDir, file);
-        const content = fs.readFileSync(fullPath, 'utf8');
+        for (const file of files) {
+          const fullPath = path.join(postsDir, file);
+          const content = fs.readFileSync(fullPath, 'utf8');
 
-        const res = await engine.render(content, {
-          theme: 'tech',
-          highlightTheme: 'atom-one-dark',
-          macCodeBlock: true,
-          imageFigures: true,
-          renderMermaid: false, // skip remote network calls in unit test
-        });
+          const res = await engine.render(content, {
+            theme: 'tech',
+            highlightTheme: 'atom-one-dark',
+            macCodeBlock: true,
+            imageFigures: true,
+            renderMermaid: false, // skip remote network calls in unit test
+          });
 
-        // 1. Output HTML should not be empty
-        expect(res.html.length).toBeGreaterThan(0);
+          // 1. Output HTML should not be empty
+          expect(res.html.length).toBeGreaterThan(0);
 
-        // 2. Must not produce Setext h2 around images
-        expect(res.html).not.toMatch(/<h2[^>]*>\s*<img/i);
+          // 2. Must not produce Setext h2 around images
+          expect(res.html).not.toMatch(/<h2[^>]*>\s*<img/i);
 
-        // 3. Every <pre> tag must have white-space: pre !important
-        const preMatches = [...res.html.matchAll(/<pre\b([^>]*)>/g)];
-        for (const p of preMatches) {
-          expect(p[1]).toContain('white-space: pre !important');
+          // 3. Every <pre> tag must have white-space: pre !important
+          const preMatches = [...res.html.matchAll(/<pre\b([^>]*)>/g)];
+          for (const p of preMatches) {
+            expect(p[1]).toContain('white-space: pre !important');
+          }
         }
-      }
-    });
+      },
+    );
   });
 });

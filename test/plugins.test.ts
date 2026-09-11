@@ -10,7 +10,8 @@ import { processImageFigures } from '../src/plugins/image-figure';
 describe('Plugins Test Suite', () => {
   describe('Footnotes Plugin', () => {
     it('extracts external links and converts them to numbered footnotes', () => {
-      const input = 'Check out [Google](https://google.com) and [GitHub](https://github.com). Local link: [About](/about).';
+      const input =
+        'Check out [Google](https://google.com) and [GitHub](https://github.com). Local link: [About](/about).';
       const result = processMarkdownFootnotes(input, 'https://myblog.com');
 
       expect(result.footnotes).toHaveLength(2);
@@ -38,9 +39,7 @@ describe('Plugins Test Suite', () => {
     });
 
     it('renders footnotes section html correctly', () => {
-      const footnotes = [
-        { index: 1, title: 'Google', url: 'https://google.com' },
-      ];
+      const footnotes = [{ index: 1, title: 'Google', url: 'https://google.com' }];
       const html = renderFootnotesHtml(footnotes);
       expect(html).toContain('footnotes-container');
       expect(html).toContain('参考链接');
@@ -63,7 +62,10 @@ describe('Plugins Test Suite', () => {
 
     it('normalizes common language aliases to standardized labels', () => {
       const cases = [
-        { html: '<pre><code class="language-js">console.log(1)</code></pre>', expected: 'JAVASCRIPT' },
+        {
+          html: '<pre><code class="language-js">console.log(1)</code></pre>',
+          expected: 'JAVASCRIPT',
+        },
         { html: '<pre><code class="language-py">print(1)</code></pre>', expected: 'PYTHON' },
         { html: '<pre><code class="language-sh">echo hello</code></pre>', expected: 'SHELL' },
         { html: '<pre><code class="language-cpp">int main() {}</code></pre>', expected: 'C++' },
@@ -87,7 +89,8 @@ describe('Plugins Test Suite', () => {
     });
 
     it('handles code blocks with extra attributes or titles', () => {
-      const html = '<pre><code class="language-swift" title="AppDelegate.swift" data-line="1">let x = 1</code></pre>';
+      const html =
+        '<pre><code class="language-swift" title="AppDelegate.swift" data-line="1">let x = 1</code></pre>';
       const decorated = decorateCodeBlocks(html, true);
 
       expect(decorated).toContain('mac-code-wrapper');
@@ -98,7 +101,8 @@ describe('Plugins Test Suite', () => {
 
   describe('Table Scroller Plugin', () => {
     it('wraps table elements in table-scroller section', () => {
-      const html = '<table><thead><tr><th>Col</th></tr></thead><tbody><tr><td>Val</td></tr></tbody></table>';
+      const html =
+        '<table><thead><tr><th>Col</th></tr></thead><tbody><tr><td>Val</td></tr></tbody></table>';
       const wrapped = wrapTablesWithScroller(html, true);
 
       expect(wrapped).toContain('<section class="table-scroller"><table>');
@@ -163,7 +167,8 @@ describe('Plugins Test Suite', () => {
 
   describe('Task Lists Plugin', () => {
     it('transforms checked and unchecked inputs into WeChat-safe styled spans', () => {
-      const html = '<ul><li><input checked="" disabled="" type="checkbox"> Complete task</li><li><input disabled="" type="checkbox"> Pending task</li></ul>';
+      const html =
+        '<ul><li><input checked="" disabled="" type="checkbox"> Complete task</li><li><input disabled="" type="checkbox"> Pending task</li></ul>';
       const result = processTaskLists(html, true);
 
       expect(result).toContain('task-checkbox-checked');
@@ -176,7 +181,8 @@ describe('Plugins Test Suite', () => {
 
   describe('Image Figure Plugin', () => {
     it('wraps standalone paragraph images with figure and caption', () => {
-      const html = '<p><img src="https://example.com/arch.png" alt="Architecture Diagram" title="Architecture Diagram"></p>';
+      const html =
+        '<p><img src="https://example.com/arch.png" alt="Architecture Diagram" title="Architecture Diagram"></p>';
       const result = processImageFigures(html, true);
 
       expect(result).toContain('wm-image-figure');
@@ -192,4 +198,3 @@ describe('Plugins Test Suite', () => {
     });
   });
 });
-
