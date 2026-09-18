@@ -76,7 +76,7 @@
     "prettier": "^3.8.1",
     "semantic-release": "^25.0.0",
     "typescript": "^5.9.3",
-    "vitest": "^1.6.1"
+    "vitest": "^4.1.11"
   },
   "type": "commonjs"
 }
