@@ -46,13 +46,37 @@ jobs:
           GH_NO_PROMPT: '1'
         run: |
           DATE="$(date -u +'%Y-%m-%d')"
-          if git log origin/main..develop | grep -Eq '^[ ]*(\* )?feat(\(.+\))?:'; then
+          if git log main..develop | grep -Eq '^[ ]*(\* )?feat(\(.+\))?:'; then
             PR_TITLE="feat(release): scheduled release from develop (${DATE})"
-          elif git log origin/main..develop | grep -Eq '^[ ]*(\* )?fix(\(.+\))?:'; then
+          elif git log main..develop | grep -Eq '^[ ]*(\* )?fix(\(.+\))?:'; then
             PR_TITLE="fix(release): scheduled release from develop (${DATE})"
           else
             PR_TITLE="chore(release): scheduled release from develop (${DATE})"
           fi
+          # Scan for issue-closing references in the promoted commit range.
+          # First extract directly from commit messages to minimize GitHub API calls.
+          closing_refs=""
+          commit_refs="$(git log main..develop --format='%B' \
+            | grep -Eio '(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]*:?[[:space:]]*#[0-9]+([[:space:],]+#[0-9]+)*' \
+            | grep -Eo '#[0-9]+' || true)"
+          closing_refs="${closing_refs}${commit_refs}"$'\n'
+
+          # Next, extract PR numbers from commit subjects and fetch PR descriptions for any additional closing keywords.
+          pr_numbers="$(git log main..develop --format='%s' \
+            | grep -Eo '\(#[0-9]+\)' \
+            | tr -d '()#' \
+            | sort -u || true)"
+
+          for pr_number in ${pr_numbers}; do
+            [ -n "$pr_number" ] || continue
+            body="$(gh pr view "$pr_number" --json body --jq '.body' 2>/dev/null || true)"
+            refs="$(printf '%s' "$body" \
+              | grep -Eio '(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]*:?[[:space:]]*#[0-9]+([[:space:],]+#[0-9]+)*' \
+              | grep -Eo '#[0-9]+' || true)"
+            closing_refs="${closing_refs}${refs}"$'\n'
+          done
+          closing_refs="$(printf '%s' "$closing_refs" | grep -Eo '#[0-9]+' | sort -u -t'#' -k2 -n || true)"
+
           BODY_FILE="$(mktemp)"
           cleanup() { rm -f "$BODY_FILE"; }
           trap cleanup EXIT
@@ -62,18 +86,51 @@ jobs:
             echo ""
             echo "This PR automatically promotes verified changes from \`develop\` into \`main\`."
             echo "- **Trigger**: Friday 15:00 Beijing time (UTC+8) scheduled release train."
-            echo "- **Auto-merge**: Enabled (\`--auto --squash\`)."
+            echo "- **Auto-merge**: Enabled (\`--auto --merge\`)."
             echo "- Once required CI checks pass, this PR merges automatically to trigger stable release."
+            if [ -n "${closing_refs}" ]; then
+              echo ""
+              echo "### Linked Issues"
+              printf '%s\n' "${closing_refs}" | sed 's/^/Closes /'
+            fi
           } > "$BODY_FILE"
+
+          enable_automerge() {
+            local pr_num="$1"
+            echo "Enabling auto-merge on PR #${pr_num} (--auto --merge)..."
+            local merge_log
+            merge_log="$(mktemp)"
+            if gh pr merge "${pr_num}" --auto --merge > "$merge_log" 2>&1; then
+              echo "Auto-merge enabled for PR #${pr_num}."
+            else
+              cat "$merge_log"
+              if grep -Eqi "clean status" "$merge_log"; then
+                echo "PR #${pr_num} is in clean status without pending checks. Merging directly via merge commit..."
+                if ! gh pr merge "${pr_num}" --merge; then
+                  echo "Failed to directly merge PR #${pr_num}." >&2
+                  rm -f "$merge_log"
+                  exit 1
+                fi
+              elif grep -Eqi "already" "$merge_log"; then
+                echo "Auto-merge is already active on PR #${pr_num}."
+              else
+                echo "Failed to configure auto-merge or merge PR #${pr_num}." >&2
+                rm -f "$merge_log"
+                exit 1
+              fi
+            fi
+            rm -f "$merge_log"
+          }
 
           EXISTING_PR="$(gh pr list --base main --head develop --state open --json number --jq '.[0].number')"
 
           if [ -n "${EXISTING_PR}" ]; then
-            echo "Open release PR #${EXISTING_PR} already exists. Ensuring auto-merge is active..."
-            gh pr merge "${EXISTING_PR}" --auto --squash
+            echo "Open release PR #${EXISTING_PR} already exists. Updating body and ensuring merge status..."
+            gh pr edit "${EXISTING_PR}" --body-file "${BODY_FILE}"
+            enable_automerge "${EXISTING_PR}"
           else
             echo "Creating new release PR..."
             NEW_PR="$(gh pr create --base main --head develop --title "${PR_TITLE}" --body-file "${BODY_FILE}")"
-            echo "Created ${NEW_PR}. Enabling auto-merge..."
-            gh pr merge "${NEW_PR}" --auto --squash
+            echo "Created ${NEW_PR}."
+            enable_automerge "${NEW_PR}"
           fi
