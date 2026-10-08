@@ -10,3 +10,6 @@ updates:
       npm_and_yarn:
         patterns:
           - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
