@@ -1,3 +1,21 @@
+# [1.7.0](https://github.com/RbBtSn0w/wechat-markdown/compare/v1.6.0...v1.7.0) (2026-10-08)
+
+
+### Bug Fixes
+
+* **ci:** address CR on audit retry loop and PR preview token security ([2901f03](https://github.com/RbBtSn0w/wechat-markdown/commit/2901f03e257633a63230c0b2b9c903551f9543c5))
+* **ci:** detect semantic commit types for release PR titles and guard zero-change diffs ([#18](https://github.com/RbBtSn0w/wechat-markdown/issues/18)) ([39ae865](https://github.com/RbBtSn0w/wechat-markdown/commit/39ae865f7e6cb7cac645a155f41a53d36ce8705c))
+* **ci:** use merge commit strategy for scheduled release train and handle clean status ([#25](https://github.com/RbBtSn0w/wechat-markdown/issues/25)) ([e8d0590](https://github.com/RbBtSn0w/wechat-markdown/commit/e8d0590b76cdfa48db4a334709ff6b3a6ed1d6b3))
+* **deps:** resolve Dependabot security advisories for undici and ip-address ([#33](https://github.com/RbBtSn0w/wechat-markdown/issues/33)) ([afc4d05](https://github.com/RbBtSn0w/wechat-markdown/commit/afc4d0516953c19848f53381729300e083262c4e))
+
+
+### Features
+
+* **ci:** enable workflow_dispatch triggers for release and sync workflows ([#20](https://github.com/RbBtSn0w/wechat-markdown/issues/20)) ([26c60ee](https://github.com/RbBtSn0w/wechat-markdown/commit/26c60eefae8da81cffb02e2b35649a9ae5f09680)), closes [#19](https://github.com/RbBtSn0w/wechat-markdown/issues/19) [#10](https://github.com/RbBtSn0w/wechat-markdown/issues/10) [#9](https://github.com/RbBtSn0w/wechat-markdown/issues/9) [#11](https://github.com/RbBtSn0w/wechat-markdown/issues/11) [#12](https://github.com/RbBtSn0w/wechat-markdown/issues/12) [#14](https://github.com/RbBtSn0w/wechat-markdown/issues/14) [#18](https://github.com/RbBtSn0w/wechat-markdown/issues/18)
+* **ci:** modernize release train with dual-branch and dev previews ([e834c5d](https://github.com/RbBtSn0w/wechat-markdown/commit/e834c5d5f80f5829273a9dcd8250899efbd20309))
+* **engine:** support syntax highlighting, Mac code blocks, and bulletproof line formatting ([#14](https://github.com/RbBtSn0w/wechat-markdown/issues/14)) ([65ed3c2](https://github.com/RbBtSn0w/wechat-markdown/commit/65ed3c22e3e4242c5a657a73c6564d45688ec018))
+* **mermaid:** harden MermaidRenderer with label sanitization, retries, and format fallbacks ([#10](https://github.com/RbBtSn0w/wechat-markdown/issues/10)) ([514acbe](https://github.com/RbBtSn0w/wechat-markdown/commit/514acbe08059d7e7188e5a07a8d9886abdc7a580))
+
 # [1.6.0](https://github.com/RbBtSn0w/wechat-markdown/compare/v1.5.0...v1.6.0) (2026-09-26)
 
 
