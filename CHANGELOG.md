@@ -1,3 +1,10 @@
+## [1.7.1](https://github.com/RbBtSn0w/wechat-markdown/compare/v1.7.0...v1.7.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* **deps:** bump brace-expansion to resolve GHSA-67hx-6x53-jw92 and GHSA-v6h7-mrgf-7557 ([#46](https://github.com/RbBtSn0w/wechat-markdown/issues/46)) ([ca0f7c4](https://github.com/RbBtSn0w/wechat-markdown/commit/ca0f7c43097796c96ebd506d2608dba3909a1da4))
+
 # [1.7.0](https://github.com/RbBtSn0w/wechat-markdown/compare/v1.6.0...v1.7.0) (2026-10-08)
 
 
