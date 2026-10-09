@@ -48,10 +48,10 @@
   "dependencies": {
     "axios": "^1.13.6",
     "highlight.js": "^11.12.0",
-    "juice": "^10.0.1",
+    "juice": "^12.2.0",
     "marked": "^12.0.2",
     "mathjax-full": "^3.2.2",
-    "pako": "^2.1.0",
+    "pako": "^3.0.2",
     "sanitize-html": "^2.17.0",
     "sharp": "^0.35.5",
     "yaml": "^2.8.2"
@@ -65,12 +65,12 @@
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/exec": "^7.1.0",
-    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/git": "^11.0.1",
     "@semantic-release/github": "^12.0.0",
     "@semantic-release/npm": "^13.1.5",
     "@types/marked": "^6.0.0",
-    "@types/node": "^20.19.37",
-    "@types/pako": "^2.0.4",
+    "@types/node": "^26.6.4",
+    "@types/pako": "^3.0.0",
     "@types/sanitize-html": "^2.16.0",
     "@types/yaml": "^1.9.7",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
