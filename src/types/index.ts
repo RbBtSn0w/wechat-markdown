@@ -74,7 +74,7 @@ export interface RenderResult {
   html: string;
   title: string;
   digest: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   footnotes: FootnoteItem[];
   images: string[];
   diagnostics: DiagnosticItem[];

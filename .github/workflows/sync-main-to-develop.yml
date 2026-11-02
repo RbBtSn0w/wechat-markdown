@@ -1,27 +1,43 @@
 name: Sync main to develop
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
 
 jobs:
   sync:
-    name: Sync main back to develop
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: develop
-          fetch-depth: 0
-
-      - name: Merge main into develop
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git merge origin/main --no-edit -m "chore(repo): sync main to develop [skip ci]"
-          git push origin develop
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-evidence
+          path: release-artifact
+      - name: Create App token for CI-triggering sync PR
+        uses: actions/create-github-app-token@v2
+        id: bot
+        with:
+          app-id: ${{ vars.RBBTSN0W_BOT_APP_ID }}
+          private-key: ${{ secrets.RBBTSN0W_BOT_PRIVATE_KEY }}
+      - name: Create or reuse sync PR
+        env:
+          GH_TOKEN: ${{ steps.bot.outputs.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/release/pr.cjs sync
+      - name: Persist sync outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-complete
+          path: release-artifact/
+          retention-days: 90

@@ -2,9 +2,19 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      failed_run:
+        description: 'Failed release run ID (recovery only; also requires version)'
+        type: string
+      version:
+        description: 'Exact version from failed run artifact (recovery only)'
+        type: string
+
+concurrency:
+  group: stable-release
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -12,32 +22,106 @@ permissions:
   issues: write
   packages: write
   pull-requests: write
+  actions: read
 
 jobs:
-  release:
-    name: Semantic Release to npm
+  classify-push:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      metadata: ${{ steps.classify.outputs.metadata }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Validate metadata-only App push without skipping PR checks
+        id: classify
+        run: node scripts/release/metadata.cjs
+  release:
+    needs: classify-push
+    if: github.ref == 'refs/heads/main' && needs.classify-push.outputs.metadata != 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.semantic.outputs.released || steps.recovery.outputs.released }}
+      version: ${{ steps.semantic.outputs.version || steps.recovery.outputs.version }}
+    env:
+      npm_config_ignore_scripts: 'true'
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+          persist-credentials: false
+      - uses: actions/setup-node@v4
         with:
-          node-version: 24.10.0
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@rbbtsn0w'
-
+          node-version: '24'
+          cache: npm
+      - name: Validate recovery inputs and App configuration
+        env:
+          FAILED_RUN: ${{ inputs.failed_run }}
+          VERSION: ${{ inputs.version }}
+          APP_ID: ${{ vars.RBBTSN0W_BOT_APP_ID }}
+          APP_KEY: ${{ secrets.RBBTSN0W_BOT_PRIVATE_KEY }}
+        run: |
+          test -n "$APP_ID" && test -n "$APP_KEY" || { echo 'Missing release App configuration'; exit 1; }
+          if [ -n "$FAILED_RUN" ] || [ -n "$VERSION" ]; then
+            test -n "$FAILED_RUN" && test -n "$VERSION" || { echo 'Recovery requires both failed_run and version'; exit 1; }
+          fi
+      - uses: actions/create-github-app-token@v2
+        if: inputs.failed_run == ''
+        id: bot
+        with:
+          app-id: ${{ vars.RBBTSN0W_BOT_APP_ID }}
+          private-key: ${{ secrets.RBBTSN0W_BOT_PRIVATE_KEY }}
+      - name: Configure GitHub Packages authentication
+        run: |
+          printf '//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}\n' > "$RUNNER_TEMP/release.npmrc"
+          echo "NPM_CONFIG_USERCONFIG=$RUNNER_TEMP/release.npmrc" >> "$GITHUB_ENV"
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
-
-      - name: Build TypeScript
+      - name: Build
+        if: inputs.failed_run == ''
         run: npm run build
-
-      - name: Run Semantic Release
+      - name: Semantic release
+        if: inputs.failed_run == ''
+        id: semantic
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_BOT_TOKEN: ${{ steps.bot.outputs.token }}
         run: npx --yes semantic-release
+      - name: Download explicitly selected failed run artifact
+        if: inputs.failed_run != ''
+        env:
+          FAILED_RUN: ${{ inputs.failed_run }}
+        run: gh run download "$FAILED_RUN" --repo "$GITHUB_REPOSITORY" --name release-evidence --dir release-artifact
+      - name: Recover only missing registry publications
+        if: inputs.failed_run != ''
+        id: recovery
+        env:
+          FAILED_RUN: ${{ inputs.failed_run }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          node scripts/release/artifact.cjs recover "$FAILED_RUN" "$VERSION"
+          echo "released=true" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Persist release evidence even after partial failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-evidence
+          path: release-artifact/
+          if-no-files-found: ignore
+          retention-days: 90
+  sync:
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    uses: ./.github/workflows/sync-main-to-develop.yml
+    secrets: inherit

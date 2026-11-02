@@ -4,20 +4,29 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main, develop, 'claude/**']
+    branches: [main, develop]
+
+permissions:
+  contents: read
 
 jobs:
   verify:
-    name: Verify & Build
+    name: Verify & Build (${{ matrix.node }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.14.0', '22', '24']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ matrix.node }}
           cache: 'npm'
 
       - name: Install dependencies
@@ -26,7 +35,7 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Typecheck
+      - name: Typecheck source and tests
         run: npm run typecheck
 
       - name: Run Tests
@@ -35,23 +44,50 @@ jobs:
       - name: Build TypeScript
         run: npm run build
 
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Verify packed consumer
+        run: npm run verify:package
+
+  audit:
+    name: Production dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
       - name: Audit production dependencies
         run: |
-          for i in 1 2 3; do
+          for attempt in 1 2 3; do
             if npm run audit:prod; then
               exit 0
             fi
-            if [ "$i" -lt 3 ]; then
-              echo "npm audit failed (attempt $i/3); retrying in 5s..."
+            if [ "$attempt" -lt 3 ]; then
               sleep 5
             fi
           done
-          echo "npm audit failed after 3 attempts."
           exit 1
+
+  verify-gate:
+    name: Verify gate
+    needs: [verify, audit]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every verification job
+        env:
+          VERIFY_RESULT: ${{ needs.verify.result }}
+          AUDIT_RESULT: ${{ needs.audit.result }}
+        run: test "$VERIFY_RESULT" = success && test "$AUDIT_RESULT" = success
 
   pr-dev-release:
     name: PR Dev Preview Release
-    needs: verify
+    needs: verify-gate
     if: |
       github.event_name == 'pull_request' &&
       github.event.pull_request.base.ref == 'develop' &&
@@ -59,131 +95,73 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: write
-      pull-requests: write
       packages: write
       id-token: write
+      pull-requests: write
+    env:
+      npm_config_ignore_scripts: 'true'
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+          persist-credentials: false
+      - uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
-          registry-url: 'https://registry.npmjs.org'
-
+          node-version: '24'
+          cache: npm
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
-
       - name: Build
         run: npm run build
-
-      - name: Calculate Dev Version
-        id: versioning
-        run: |
-          PR_NUM="${{ github.event.pull_request.number }}"
-          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-          SHORT_SHA="${HEAD_SHA:0:7}"
-          BASE_VERSION="$(node -p 'require("./package.json").version.replace(/-.*$/, "")')"
-          DEV_VERSION="${BASE_VERSION}-dev.pr${PR_NUM}.${SHORT_SHA}"
-          npm version "${DEV_VERSION}" --no-git-tag-version --allow-same-version
-          echo "dev_version=${DEV_VERSION}" >> "$GITHUB_OUTPUT"
-
-      - name: Publish to npm (next dist-tag)
-        id: npm_publish
-        run: |
-          DEV_VERSION="${{ steps.versioning.outputs.dev_version }}"
-          echo "Attempting OIDC provenance publish for ${DEV_VERSION}..."
-          sed -i.bak '/_authToken/d' ~/.npmrc || true
-          if npm publish --provenance --tag next --access public --ignore-scripts; then
-            echo "npm_published=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "npm_published=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::npm publish via OIDC rejected (PR dev preview available via GitHub Packages)."
-          fi
-
-      - name: Mirror to GitHub Packages
-        id: gh_packages
+      - name: Calculate preview version and save artifact
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          DEV_VERSION="${{ steps.versioning.outputs.dev_version }}"
-          publish_log="$(mktemp)"
-          cleanup() { rm -f .npmrc "$publish_log"; }
-          trap cleanup EXIT
-          OWNER_LOWER="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
-          {
-            echo "@${OWNER_LOWER}:registry=https://npm.pkg.github.com"
-            echo '//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}'
-          } > .npmrc
-          if npm publish --registry https://npm.pkg.github.com --tag next --ignore-scripts 2> "$publish_log"; then
-            echo "gh_packages_published=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "gh_packages_published=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::GitHub Packages publish failed."
-          fi
-
-      - name: Post or Update PR Comment
-        if: steps.npm_publish.outputs.npm_published == 'true' || steps.gh_packages.outputs.gh_packages_published == 'true'
+          VERSION="$(node -p 'require("./package.json").version.replace(/-.*$/, "")')-dev.pr${PR_NUMBER}.${HEAD_SHA}"
+          npm version "$VERSION" --no-git-tag-version --allow-same-version --ignore-scripts
+          node scripts/release/artifact.cjs preview "$VERSION"
+      - name: Attempt both registries and require at least one verified preview
+        run: |
+          printf '//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}\n' > "$RUNNER_TEMP/preview.npmrc"
+          export NPM_CONFIG_USERCONFIG="$RUNNER_TEMP/preview.npmrc"
+          node scripts/release/artifact.cjs publish
+      - name: Post or update preview verification comment
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-            const pkgName = pkg.name || 'pkg';
-            const devVersion = '${{ steps.versioning.outputs.dev_version }}';
-            const npmPublished = '${{ steps.npm_publish.outputs.npm_published }}' === 'true';
-            const ghPublished = '${{ steps.gh_packages.outputs.gh_packages_published }}' === 'true';
-
-            const commentHeader = '### 🚀 PR Dev Preview Released';
-            const registries = [];
-            if (npmPublished) {
-              registries.push(`| **npm** | \`${pkgName}@${devVersion}\` | \`next\` |`);
-            }
-            if (ghPublished) {
-              registries.push(`| **GitHub Packages** | \`${pkgName}@${devVersion}\` | \`next\` |`);
-            }
-
+            const fs = require('node:fs');
+            const receipt = JSON.parse(fs.readFileSync('release-artifact/receipt.json', 'utf8'));
+            const header = '### 🚀 PR Dev Preview Released';
+            const registries = Object.entries(receipt.registries)
+              .filter(([, state]) => state === 'verified')
+              .map(([registry]) => `| ${registry === 'npm' ? 'npm' : 'GitHub Packages'} | \`${receipt.name}@${receipt.version}\` |`);
+            if (!registries.length) throw new Error('No verified preview to announce');
             const body = [
-              commentHeader,
+              header,
               '',
-              'A temporary development build has been published for testing and acceptance verification:',
+              'The package contents were downloaded and verified for these registries:',
               '',
-              '| Registry | Package / Version | Dist-tag |',
-              '| :--- | :--- | :--- |',
+              '| Registry | Package |',
+              '| :--- | :--- |',
               ...registries,
               '',
-              '#### 🛠️ Quick Verification Options',
-              '```bash',
-              `npm install ${pkgName}@${devVersion}`,
-              '```',
+              `Verification evidence: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             ].join('\n');
-
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              ...context.repo, issue_number: context.issue.number,
             });
-
-            const botComment = comments.find(c => c.user && c.user.type === 'Bot' && c.body && c.body.includes(commentHeader));
-            if (botComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: botComment.id,
-                body,
-              });
+            const existing = comments.find(comment => comment.user?.login === 'github-actions[bot]' && comment.body?.startsWith(header));
+            if (existing) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
             } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
             }
+      - name: Persist preview verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          path: release-artifact/
+          if-no-files-found: ignore

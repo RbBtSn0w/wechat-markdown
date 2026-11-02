@@ -19,17 +19,18 @@
     "url": "git+https://github.com/RbBtSn0w/wechat-markdown.git"
   },
   "publishConfig": {
-    "access": "public",
-    "registry": "https://registry.npmjs.org/"
+    "access": "public"
   },
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint 'src/**/*.{ts,js}'",
+    "lint": "eslint 'src/**/*.ts' 'test/**/*.ts' 'scripts/**/*.{js,cjs,mjs}' --no-error-on-unmatched-pattern --max-warnings=0",
     "format": "prettier --write 'src/**/*.{ts,js}'",
-    "audit:prod": "npm audit --omit=dev --audit-level=high"
+    "audit:prod": "npm audit --omit=dev --audit-level=high",
+    "format:check": "prettier --check .github/workflows/*.yml .releaserc.json package.json tsconfig*.json vitest.config.mts .eslintrc.js src/ test/ scripts/ docs/",
+    "verify:package": "npm run build && node scripts/verify-package.mjs"
   },
   "keywords": [
     "markdown",
@@ -52,27 +53,25 @@
     "marked": "^12.0.2",
     "mathjax-full": "^3.2.2",
     "pako": "^3.0.2",
-    "sanitize-html": "^2.17.0",
+    "sanitize-html": "^2.18.1",
     "sharp": "^0.35.5",
-    "yaml": "^2.8.2"
+    "yaml": "^2.8.2",
+    "cheerio": "^1.2.0",
+    "htmlparser2": "^12.0.0"
   },
   "overrides": {
     "@xmldom/xmldom": "^0.9.12",
     "source-map-js": "^1.2.2",
     "ip-address": "^10.7.3",
-    "undici": "^7.30.0"
+    "undici": "^7.30.1"
   },
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",
-    "@semantic-release/exec": "^7.1.0",
-    "@semantic-release/git": "^11.0.1",
+    "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^12.0.0",
     "@semantic-release/npm": "^13.1.5",
-    "@types/marked": "^6.0.0",
-    "@types/node": "^26.6.4",
-    "@types/pako": "^3.0.0",
+    "@types/node": "^22.0.0",
     "@types/sanitize-html": "^2.16.0",
-    "@types/yaml": "^1.9.7",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
     "eslint": "^8.57.1",
@@ -82,5 +81,8 @@
     "typescript": "^5.9.3",
     "vitest": "^4.1.11"
   },
-  "type": "commonjs"
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22.14.0"
+  }
 }
