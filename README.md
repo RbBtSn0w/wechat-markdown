@@ -254,7 +254,10 @@ npm run audit:prod
 
 # Check formatting and packed consumer behavior
 npm run format:check
-npm run verify:package
+npm run build
+pack_dir=$(mktemp -d)
+npm pack --ignore-scripts --pack-destination "$pack_dir"
+npm run verify:package -- "$pack_dir"/*.tgz
 ```
 
 ## 🛠️ Build

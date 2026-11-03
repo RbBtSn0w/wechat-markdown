@@ -55,8 +55,10 @@ function mathMatch(src: string, display: boolean): { raw: string; expression: st
     if (!display && (src[index - 1] === '$' || src[index + 1] === '$')) continue;
     const end = index + delimiter.length;
     if (display && !/^(?:[ \t]*\n|$)/.test(src.slice(end))) continue;
-    const expression = src.slice(delimiter.length, index).trim();
+    const body = src.slice(delimiter.length, index);
+    const expression = body.trim();
     if (!expression || (!display && /^\d+(\.\d+)?$/.test(expression))) return;
+    if (!display && (/^\s/.test(body) || /\s$/.test(body) || /\d/.test(src[end] ?? ''))) continue;
     return { raw: src.slice(0, end), expression };
   }
 }

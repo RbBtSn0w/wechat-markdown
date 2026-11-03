@@ -237,3 +237,18 @@ describe('Markdown token boundaries', () => {
     );
   });
 });
+
+it('keeps currency prose out of inline TeX delimiters', async () => {
+  const calls: string[] = [];
+  const formulaRenderer = {
+    renderToImage: (expression: string) => {
+      calls.push(expression);
+      return '/formula.png';
+    },
+  };
+  const result = await renderMarkdownToWechat('costs $5 and $10; $ spaced $; $x$10', {
+    services: { formulaRenderer },
+  });
+  expect(calls).toEqual([]);
+  expect(result.html).toContain('costs $5 and $10');
+});

@@ -14,7 +14,9 @@ test('entry gate executes only scheduled/manual main candidates; authority is de
   assert.match(workflow.jobs.release.if, /vars.RELEASE_ENABLED/);
   assert.match(workflow.jobs.release.if, /needs.verify.result/);
   assert.match(workflow.jobs.release.if, /needs.verify.outputs.artifact-id/);
-  assert.deepEqual(workflow.jobs.release.needs, ['verify']);
+  assert.deepEqual(workflow.jobs.release.needs, ['verify', 'audit']);
+  assert.equal(workflow.jobs.audit.permissions.contents, 'read');
+  assert.match(workflow.jobs.release.if, /needs.audit.result/);
   assert.equal(workflow.jobs.verify.permissions.contents, 'read');
   assert.equal(workflow.jobs.verify.permissions['id-token'], undefined);
   assert.equal(workflow.concurrency.group, 'release-main');
