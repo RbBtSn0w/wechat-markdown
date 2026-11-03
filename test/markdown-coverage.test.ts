@@ -178,41 +178,67 @@ echo "\${{ secrets.GITHUB_TOKEN }}"
     });
   });
 
-  describe('6. Entire Blog Corpus (76 Posts) Full Regression Test', () => {
-    const postsDir = path.resolve(__dirname, '../../rbbtsn0w.github.io/_posts');
-    const hasPosts = fs.existsSync(postsDir);
+  describe('6. Portable Article Corpus', () => {
+    const fixtures = ['mixed-article.md'];
 
-    it.skipIf(!hasPosts)(
-      'renders all blog posts without throwing or generating broken code tags',
-      async () => {
-        const files = fs.readdirSync(postsDir).filter((f) => f.endsWith('.md'));
-        expect(files.length).toBeGreaterThanOrEqual(70);
-
-        for (const file of files) {
-          const fullPath = path.join(postsDir, file);
-          const content = fs.readFileSync(fullPath, 'utf8');
-
-          const res = await engine.render(content, {
-            theme: 'tech',
-            highlightTheme: 'atom-one-dark',
-            macCodeBlock: true,
-            imageFigures: true,
-            renderMermaid: false, // skip remote network calls in unit test
+    for (const theme of ['tech', 'grace', 'geek']) {
+      it(`renders the checked-in article with the ${theme} theme`, async () => {
+        for (const file of fixtures) {
+          const content = fs.readFileSync(path.join(__dirname, 'fixtures', file), 'utf8');
+          const result = await engine.render(content, {
+            theme,
+            services: {
+              formulaRenderer: { renderToImage: () => 'https://example.org/formula.png' },
+              mermaidRenderer: { renderToImage: () => 'https://example.org/diagram.png' },
+            },
           });
-
-          // 1. Output HTML should not be empty
-          expect(res.html.length).toBeGreaterThan(0);
-
-          // 2. Must not produce Setext h2 around images
-          expect(res.html).not.toMatch(/<h2[^>]*>\s*<img/i);
-
-          // 3. Every <pre> tag must have white-space: pre !important
-          const preMatches = [...res.html.matchAll(/<pre\b([^>]*)>/g)];
-          for (const p of preMatches) {
-            expect(p[1]).toContain('white-space: pre !important');
+          expect(result.title).toBe('Reliable Rendering');
+          expect(result.diagnostics).toEqual([]);
+          expect(result.stats.formulas).toBe(2);
+          expect(result.stats.mermaid).toBe(1);
+          expect(result.stats.footnotes).toBe(1);
+          expect(result.html).toContain('Architecture overview');
+          expect(result.html).toContain('overflow-x: auto');
+          expect(result.html).toContain('-webkit-overflow-scrolling: touch');
+          expect(result.html).not.toMatch(/\s(?:class|id)=/);
+          expect(result.html).not.toMatch(/<\/li>\s+<li/);
+          expect(result.html).not.toMatch(/<h2[^>]*>\s*<img/i);
+          for (const [, attributes] of result.html.matchAll(/<pre\b([^>]*)>/g)) {
+            expect(attributes).toContain('white-space: pre !important');
           }
         }
-      },
-    );
+      });
+    }
+
+    it('renders a long article without losing the ending or list structure', async () => {
+      const paragraph = 'A self-contained paragraph verifies stable long-document rendering.\n\n';
+      const result = await engine.render(
+        '# Long Article\n\n' + paragraph.repeat(300) + '- Final item',
+        {
+          renderMath: false,
+          renderMermaid: false,
+        },
+      );
+      expect(result.html.match(/<p[ >]/g)).toHaveLength(300);
+      expect(result.html).toContain('Final item');
+      expect(result.diagnostics).toEqual([]);
+    });
   });
+
+  // External corpus validation is opt-in and never changes the default suite.
+  if (process.env.WECHAT_MARKDOWN_POSTS_DIR) {
+    it('renders the explicitly selected external article corpus', async () => {
+      const postsDir = path.resolve(process.env.WECHAT_MARKDOWN_POSTS_DIR!);
+      const files = fs.readdirSync(postsDir).filter((file) => file.endsWith('.md'));
+      expect(files.length).toBeGreaterThan(0);
+      for (const file of files) {
+        const result = await engine.render(fs.readFileSync(path.join(postsDir, file), 'utf8'), {
+          renderMath: false,
+          renderMermaid: false,
+        });
+        expect(result.html.length).toBeGreaterThan(0);
+        expect(result.html).not.toMatch(/<h2[^>]*>\s*<img/i);
+      }
+    });
+  }
 });

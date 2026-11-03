@@ -8,7 +8,7 @@ Welcome, Agent. This document defines the authoritative, non-negotiable operatin
 
 - **Package**: `@rbbtsn0w/wechat-markdown`
 - **Domain**: High-fidelity Markdown to WeChat Official Account HTML converter SDK & middleware.
-- **Runtime & Stack**: Node.js 20+ / TypeScript 5.9+, CommonJS build output (`dist/`).
+- **Runtime & Stack**: Node.js 22.14+ / TypeScript 5.9+, CommonJS build output (`dist/`).
 - **Core Engine Stack**:
   - `marked`: AST parsing, custom tokenizers, and custom renderer hooks.
   - `juice`: Post-render CSS computing and node-level style inlining.
@@ -19,31 +19,13 @@ Welcome, Agent. This document defines the authoritative, non-negotiable operatin
 
 ---
 
-## 2. Branching & Release Train Constitution
+## 2. Branching and Release
 
-This repository adheres to an automated dual-branch release train (`develop` / `main`). Every agent must respect this hierarchy without exception:
-
-| Branch               | Role                           | Rules & Constraints                                                                                                                                                                                                              |
-| :------------------- | :----------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `develop`            | **Primary Development Trunk**  | All feature, fix, refactor, and chore PRs **must** target `develop`. Direct pushes are forbidden; branches must pass full CI.                                                                                                    |
-| `main`               | **Production Release Trunk**   | Protected branch. Receives code **only** via scheduled Friday release train PRs (`develop -> main`). Direct commits, ad-hoc PRs, and force-pushes are strictly blocked by `.github/workflows/pr-target.yml` and GitHub Rulesets. |
-| `feature/*`, `fix/*` | **Ephemeral Working Branches** | Branch off `develop`, submit PRs targeting `develop`.                                                                                                                                                                            |
-
-### Key Release Workflows
-
-1. **Target Gate Validator** (`.github/workflows/pr-target.yml`):
-   - Automatically fails any developer PR directly targeting `main`.
-   - Explicitly permits only automated release PRs (`develop -> main`).
-2. **Weekly Release Train** (`.github/workflows/scheduled-release-pr.yml`):
-   - Fires every Friday at 15:00 Beijing time (UTC+8 / `0 7 * * 5` UTC).
-   - Inspects `main..develop` diff. If changes exist, opens a release PR with `--auto --squash`.
-3. **Official Production Release** (`.github/workflows/release.yml`):
-   - Runs exclusively on pushes to `main`.
-   - Uses npm Trusted Publishing (OIDC) to publish stable releases to npm and `GITHUB_TOKEN` for GitHub Packages under `@rbbtsn0w`.
-4. **Post-Release Reverse Sync** (`.github/workflows/sync-main-to-develop.yml`):
-   - Automatically merges `main` back into `develop` post-release with `[skip ci]`, keeping development in sync with official release tags and changelogs.
-5. **PR Dev Previews** (in `.github/workflows/ci.yml`):
-   - Every PR targeting `develop` automatically builds an ephemeral preview build (`<version>-dev.pr<num>.<sha>`) and posts a sticky verification comment.
+`main` is the only integration trunk. Branch from current `origin/main` and submit
+reviewed squash PRs to `main`. Preserve Conventional Commit title/body and breaking
+change declarations. CI and PRs never publish; the default-off scheduled/manual
+workflow owns stable npmjs + GitHub Packages. See `docs/release-train.md` for
+artifact boundaries, activation blockers and partial-publication recovery.
 
 ---
 
@@ -110,7 +92,7 @@ When authoring or modifying GitHub Actions workflows or automation scripts, agen
 2. **No Interactive CLI Deadlocks**:
    - Every CLI tool invocation in CI (`npx`, `pnpm`, etc.) must pass non-interactive flags (`--yes` or `--frozen-lockfile`).
 3. **No Secret Token Injection in PR Workflows**:
-   - Never inject `NPM_TOKEN` into pull request workflows (`pr-dev-release`). PR previews must use ephemeral OIDC or scoped `GITHUB_TOKEN`.
+   - Never inject `NPM_TOKEN` into pull request workflows (`pr-dev-release`). PR workflows do not publish or receive publishing authority.
    - All `npm publish` calls in automated workflows must include `--ignore-scripts` to block lifecycle script code execution during packaging.
 4. **Unambiguous Timezones**:
    - Never use ambiguous timezone abbreviations (e.g. CST). Always pair UTC crons with explicit Beijing time comments (e.g. `# Every Friday at 15:00 Beijing time (UTC+8) -> 07:00 UTC`).
@@ -145,3 +127,13 @@ When addressing code review comments or executing `/gh-address-cr`:
   - Never execute destructive git commands (`git reset --hard`, `git push --force`, `git clean -f`).
   - Never stage (`git add`) or push (`git push`) unless explicitly requested by the developer.
   - Keep the working directory clean and verify `git status` before and after operations.
+
+## 8. Runtime and Release Activation
+
+- Source and test types target Node.js 22; the CI matrix covers 22.14.0, current 22, and current 24. Stable release tooling runs on Node.js 24.
+- Required checks are `Verify gate` and `Validate base branch`; the former aggregates the complete build matrix and isolated production audit.
+- Use `GITHUB_TOKEN` by default. No release workflow writes metadata commits or requires a protected-branch bypass.
+- The source-controlled rules proposal is reviewable preparation; do not claim live rules are active without inspecting GitHub after an explicitly authorized activation.
+- The next release includes breaking runtime and metadata typing changes. Its squash message must retain a Conventional Commits `BREAKING CHANGE:` declaration; do not publish it as a patch.
+- Run `npm run format:check` and `npm run test:package -- /absolute/path/package.tgz` in addition to the mandatory commands above. Registry verification and the first normal release remain separate remote acceptance evidence.
+- See `docs/release-train.md` and `docs/migration-v2.md` for activation, recovery, compatibility, and rollback boundaries.

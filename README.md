@@ -59,6 +59,8 @@
 
 ## 📦 Installation
 
+**Requires Node.js 22.14.0 or newer.** The package remains CommonJS and supports TypeScript consumers. Use `nvm use` when developing this repository.
+
 Install via npm / pnpm / yarn:
 
 ```bash
@@ -193,11 +195,22 @@ const result = await renderMarkdownToWechat(markdown, {
 });
 ```
 
-The string a service returns is **substituted into `src` verbatim** — a local
+The string a service returns is **stored as an escaped image `src` attribute value** — a local
 path, a `data:` URI, and an already-uploaded CDN URL are all valid. Omit
 `services` to use the built-in MathJax and Kroki renderers.
 
 For plain (non-generated) images, use the `resolveImage` hook instead.
+
+## Input and Result Contracts
+
+- `siteUrl`, when supplied, must be an absolute HTTP(S) URL without credentials. Invalid values throw `TypeError` before rendering begins. Root-relative links resolve against the URL origin; protocol-relative links are not concatenated to the base path.
+- A malformed article link loses its `href` if URL resolution fails; the article text still renders.
+- `resolveImage(src, alt)` receives decoded attribute values once per image, in document order. Only that image's `src` changes. Empty values or rejected callbacks retain the original source; failures add `IMAGE_RESOLVE_FAILED`.
+- `result.images` and `stats.images` describe original image occurrences before resolution, including generated formula and diagram images.
+- `metadata` is `Record<string, unknown>`. Front-matter must be a mapping, and `title`, `description`, and `digest` must be non-empty strings. Invalid fields produce warnings and fall back to valid fields or article text.
+- Formula and Mermaid rendering respects Markdown token boundaries. Code examples, escaped dollar signs, and raw HTML are preserved. Mermaid supports backtick and tilde code fences. Failed formulas remain literal text; failed diagrams become code blocks.
+
+See [the major-version migration guide](docs/migration-v2.md) for compatibility changes.
 
 ## 🚢 Release Workflow
 
@@ -221,6 +234,8 @@ The workflow uses GitHub Actions OIDC and requires no npm publish token. Future 
 
 ## 🧪 Testing & Verification
 
+Default tests use checked-in original fixtures and never discover neighboring repositories or hidden worktrees. To opt into an additional external corpus, set `WECHAT_MARKDOWN_POSTS_DIR` to its article directory. Missing or empty selected directories fail verification.
+
 ```bash
 # Run unit tests
 npm test
@@ -228,7 +243,7 @@ npm test
 # Run tests in watch mode
 npm run test:watch
 
-# Static type check
+# Static type check (source and tests)
 npm run typecheck
 
 # Code style lint
@@ -236,6 +251,13 @@ npm run lint
 
 # Check production dependencies security
 npm run audit:prod
+
+# Check formatting and packed consumer behavior
+npm run format:check
+npm run build
+pack_dir=$(mktemp -d)
+npm pack --ignore-scripts --pack-destination "$pack_dir"
+npm run verify:package -- "$pack_dir"/*.tgz
 ```
 
 ## 🛠️ Build
@@ -253,4 +275,3 @@ ISC © [RbBtSn0w](https://github.com/RbBtSn0w)
 - [doocs/md](https://github.com/doocs/md) (MIT License) - Industry standard WeChat Markdown editor inspiring our syntax highlighting styles and WeChat Webview layout hardening rules.
 - [highlight.js](https://highlightjs.org/) (BSD 3-Clause) - Universal code syntax highlighter.
 - [juice](https://github.com/Automattic/juice) (MIT License) - CSS inliner for HTML emails and WeChat articles.
-

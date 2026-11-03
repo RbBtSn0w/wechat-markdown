@@ -1,4 +1,8 @@
-import { marked } from 'marked';
+import { Marked, Renderer, Token, Tokenizer, Tokens } from 'marked';
+import { load } from 'cheerio';
+import { Parser as HtmlParser } from 'htmlparser2';
+import { errorMessage } from './errors';
+import { validateSiteUrl } from './urls';
 import yaml from 'yaml';
 import {
   RenderOptions,
@@ -37,6 +41,28 @@ function escapeHtmlAttribute(value: string): string {
     .replace(/>/g, '&gt;');
 }
 
+/** Locate delimiters without treating an escaped dollar as the end of TeX. */
+function mathMatch(src: string, display: boolean): { raw: string; expression: string } | undefined {
+  const delimiter = display ? '$$' : '$';
+  if (!src.startsWith(delimiter) || (!display && src.startsWith('$$'))) return;
+  let backslashes = 0;
+  for (let index = delimiter.length; index < src.length; index++) {
+    const char = src[index];
+    if (!display && char === '\n') return;
+    const escaped = backslashes % 2 === 1;
+    backslashes = char === '\\' ? backslashes + 1 : 0;
+    if (escaped || !src.startsWith(delimiter, index)) continue;
+    if (!display && (src[index - 1] === '$' || src[index + 1] === '$')) continue;
+    const end = index + delimiter.length;
+    if (display && !/^(?:[ \t]*\n|$)/.test(src.slice(end))) continue;
+    const body = src.slice(delimiter.length, index);
+    const expression = body.trim();
+    if (!expression || (!display && /^\d+(\.\d+)?$/.test(expression))) return;
+    if (!display && (/^\s/.test(body) || /\s$/.test(body) || /\d/.test(src[end] ?? ''))) continue;
+    return { raw: src.slice(0, end), expression };
+  }
+}
+
 export class WechatMarkdownEngine {
   private formulaRenderer?: FormulaRenderService;
   private mermaidRenderer?: MermaidRenderService;
@@ -63,125 +89,36 @@ export class WechatMarkdownEngine {
   /**
    * Parse Front-matter and extract YAML metadata if present
    */
-  private extractFrontmatter(content: string): { metadata: Record<string, any>; markdown: string } {
-    const frontmatterRegex = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;
-    const match = content.match(frontmatterRegex);
-
-    if (match) {
-      try {
-        const parsed = yaml.parse(match[1]) || {};
-        return {
-          metadata: parsed,
-          markdown: match[2],
-        };
-      } catch {
-        // Return original if parsing fails
-        return { metadata: {}, markdown: content };
-      }
-    }
-
-    return { metadata: {}, markdown: content };
-  }
-
-  /**
-   * Process and render LaTeX formulas in Markdown to images
-   */
-  private async processFormulas(
-    markdown: string,
+  private extractFrontmatter(
+    content: string,
     diagnostics: DiagnosticItem[],
-    renderer: FormulaRenderService,
-  ): Promise<{ markdown: string; count: number }> {
-    let count = 0;
-    let processed = markdown;
-
-    // 1. Block formulas: $$...$$
-    const blockFormulaRegex = /\$\$([\s\S]+?)\$\$/g;
-    const blockMatches = [...processed.matchAll(blockFormulaRegex)];
-
-    for (const match of blockMatches) {
-      const fullMatch = match[0];
-      const expr = match[1].trim();
-      try {
-        const imagePath = await renderer.renderToImage(expr, true);
-        count++;
-        processed = processed.replace(
-          fullMatch,
-          `\n\n<p class="wm-figure"><img src="${escapeHtmlAttribute(imagePath)}" alt="formula" class="wm-formula-block" /></p>\n\n`,
-        );
-      } catch (err: any) {
+  ): { metadata: Record<string, unknown>; markdown: string } {
+    const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+    if (!match) return { metadata: {}, markdown: content };
+    try {
+      const parsed: unknown = yaml.parse(match[1]);
+      if (
+        parsed === null ||
+        typeof parsed !== 'object' ||
+        Array.isArray(parsed) ||
+        ![Object.prototype, null].includes(Object.getPrototypeOf(parsed))
+      ) {
         diagnostics.push({
-          code: 'FORMULA_RENDER_FAILED',
+          code: 'FRONTMATTER_INVALID',
           severity: 'warning',
-          message: `Failed to render block formula: ${err.message}`,
+          message: 'Frontmatter must be a plain mapping.',
         });
+        return { metadata: {}, markdown: match[2] };
       }
+      return { metadata: parsed as Record<string, unknown>, markdown: match[2] };
+    } catch (error: unknown) {
+      diagnostics.push({
+        code: 'FRONTMATTER_INVALID',
+        severity: 'warning',
+        message: `Failed to parse frontmatter: ${errorMessage(error)}`,
+      });
+      return { metadata: {}, markdown: content };
     }
-
-    // 2. Inline formulas: $...$ (avoid escaping currency $10)
-    const inlineFormulaRegex = /(?<!\$)\$(?!\$)([^\n$]+?)(?<!\$)\$(?!\$)/g;
-    const inlineMatches = [...processed.matchAll(inlineFormulaRegex)];
-
-    for (const match of inlineMatches) {
-      const fullMatch = match[0];
-      const expr = match[1].trim();
-      // Skip simple price formats like $10 or $20.50
-      if (/^\d+(\.\d+)?$/.test(expr)) {
-        continue;
-      }
-      try {
-        const imagePath = await renderer.renderToImage(expr, false);
-        count++;
-        processed = processed.replace(
-          fullMatch,
-          `<img src="${escapeHtmlAttribute(imagePath)}" alt="formula" class="wm-formula-inline" />`,
-        );
-      } catch (err: any) {
-        diagnostics.push({
-          code: 'FORMULA_RENDER_FAILED',
-          severity: 'warning',
-          message: `Failed to render inline formula: ${err.message}`,
-        });
-      }
-    }
-
-    return { markdown: processed, count };
-  }
-
-  /**
-   * Process Mermaid code blocks to images with degradation support
-   */
-  private async processMermaid(
-    markdown: string,
-    diagnostics: DiagnosticItem[],
-    renderer: MermaidRenderService,
-  ): Promise<{ markdown: string; count: number }> {
-    let count = 0;
-    let processed = markdown;
-    const mermaidRegex = /```mermaid\r?\n([\s\S]*?)```/g;
-    const matches = [...processed.matchAll(mermaidRegex)];
-
-    for (const match of matches) {
-      const fullMatch = match[0];
-      const code = match[1];
-      try {
-        const imagePath = await renderer.renderToImage(code);
-        count++;
-        processed = processed.replace(
-          fullMatch,
-          `\n\n<p class="wm-figure"><img src="${escapeHtmlAttribute(imagePath)}" alt="mermaid-diagram" class="wm-mermaid" /></p>\n\n`,
-        );
-      } catch (err: any) {
-        diagnostics.push({
-          code: 'MERMAID_RENDER_FAILED',
-          severity: 'warning',
-          message: `Failed to render Mermaid diagram, falling back to code block: ${err.message}`,
-        });
-        // Degrade to standard code block
-        processed = processed.replace(fullMatch, `\`\`\`text\n${code}\n\`\`\``);
-      }
-    }
-
-    return { markdown: processed, count };
   }
 
   /**
@@ -209,17 +146,31 @@ export class WechatMarkdownEngine {
       services,
     } = options;
 
+    validateSiteUrl(siteUrl);
+
     // Structural CSS for the markup each enabled capability emits. Layered
     // under the theme so a theme that styles nothing still renders correctly,
     // and a theme that styles everything keeps full control.
     const baseCss: string[] = [];
 
     // 1. Extract Frontmatter
-    const { metadata, markdown } = this.extractFrontmatter(markdownInput);
+    const { metadata, markdown } = this.extractFrontmatter(markdownInput, diagnostics);
     let workingMarkdown = markdown;
 
     // 2. Extract and extract Title / Digest
-    let title = metadata.title || '';
+    const fields: Record<string, string> = {};
+    for (const key of ['title', 'description', 'digest']) {
+      if (!(key in metadata)) continue;
+      const value = metadata[key];
+      if (typeof value === 'string' && value.trim()) fields[key] = value;
+      else
+        diagnostics.push({
+          code: 'FRONTMATTER_INVALID',
+          severity: 'warning',
+          message: `Frontmatter ${key} must be a nonempty string.`,
+        });
+    }
+    let title = fields.title || '';
     if (!title) {
       const titleMatch = workingMarkdown.match(/^#\s+(.+)$/m);
       if (titleMatch) {
@@ -227,7 +178,7 @@ export class WechatMarkdownEngine {
       }
     }
 
-    let digest = metadata.description || metadata.digest || '';
+    let digest = fields.description || fields.digest || '';
     if (!digest) {
       // Find first non-empty paragraph
       const cleanPara = workingMarkdown
@@ -248,37 +199,16 @@ export class WechatMarkdownEngine {
       footnotes = footnoteResult.footnotes;
     }
 
-    // 4. Process LaTeX Math
     let formulaCount = 0;
-    if (renderMath) {
-      baseCss.push(formulaBaseCss);
-      const formulaResult = await this.processFormulas(
-        workingMarkdown,
-        diagnostics,
-        this.getFormulaRenderer(services?.formulaRenderer),
-      );
-      workingMarkdown = formulaResult.markdown;
-      formulaCount = formulaResult.count;
-    }
-
-    // 5. Process Mermaid Diagrams
     let mermaidCount = 0;
-    if (renderMermaid) {
-      baseCss.push(mermaidBaseCss);
-      const mermaidResult = await this.processMermaid(
-        workingMarkdown,
-        diagnostics,
-        this.getMermaidRenderer(services?.mermaidRenderer),
-      );
-      workingMarkdown = mermaidResult.markdown;
-      mermaidCount = mermaidResult.count;
-    }
+    if (renderMath) baseCss.push(formulaBaseCss);
+    if (renderMermaid) baseCss.push(mermaidBaseCss);
 
     // Base code highlighting CSS
     baseCss.push(getHighlightCss(highlightTheme));
 
     // 6. Parse Markdown to HTML via marked with syntax highlighting
-    const markedRenderer = new marked.Renderer();
+    const markedRenderer = new Renderer();
     markedRenderer.code = (code: string, infostring?: string) => {
       const lang = (infostring || '').match(/^\S*/)?.[0] || '';
       const { highlighted, language } = highlightCode(code, lang, showLineNumber);
@@ -290,11 +220,167 @@ export class WechatMarkdownEngine {
       return `<pre><code${langClass}>${highlighted}</code></pre>\n`;
     };
 
-    let rawHtml = await marked.parse(workingMarkdown, {
-      gfm: true,
-      breaks: false,
-      renderer: markedRenderer,
+    const parser = new Marked({ gfm: true, breaks: false, renderer: markedRenderer });
+    type MediaToken = Tokens.Generic & {
+      expression?: string;
+      display?: boolean;
+      html?: string;
+      inHtml?: boolean;
+    };
+    let inlineMath = false;
+    let htmlDepth = 0;
+    if (renderMath) {
+      parser.use({
+        extensions: [
+          {
+            name: 'mathBlock',
+            level: 'block',
+            start(src) {
+              return /^ {0,3}\$\$/m.exec(src)?.index;
+            },
+            tokenizer(src) {
+              const indentation = /^ {0,3}(?=\$\$)/.exec(src)?.[0] ?? '';
+              const match = mathMatch(src.slice(indentation.length), true);
+              if (match)
+                return {
+                  type: 'mathBlock',
+                  raw: indentation + match.raw,
+                  expression: match.expression,
+                  display: true,
+                };
+            },
+            renderer(token) {
+              return (token as MediaToken).html ?? escapeHtmlAttribute(token.raw);
+            },
+          },
+          {
+            name: 'mathInline',
+            level: 'inline',
+            start(src) {
+              if (inlineMath && !htmlDepth) return src.indexOf('$');
+            },
+            tokenizer(src) {
+              if (!inlineMath || htmlDepth) return;
+              const match = mathMatch(src, false);
+              if (match) {
+                return {
+                  type: 'mathInline',
+                  raw: match.raw,
+                  expression: match.expression,
+                  display: false,
+                };
+              }
+            },
+            renderer(token) {
+              return (token as MediaToken).html ?? escapeHtmlAttribute(token.raw);
+            },
+          },
+        ],
+      });
+    }
+    const tokens = parser.lexer(workingMarkdown);
+    if (renderMath) {
+      const htmlScope = new HtmlParser({
+        onopentag() {
+          htmlDepth++;
+        },
+        onclosetag() {
+          htmlDepth--;
+        },
+      });
+      parser.use({
+        tokenizer: {
+          tag(this: Tokenizer, src) {
+            const token = Tokenizer.prototype.tag.call(this, src);
+            if (token) htmlScope.write(token.raw);
+            return token;
+          },
+        },
+      });
+      const inlineLexer = new parser.Lexer(parser.defaults);
+      inlineLexer.tokens.links = tokens.links;
+      inlineMath = true;
+      // Marked defers inline lexing until every block has been read. Re-lex inline
+      // content in document order so block and inline HTML share the same scope.
+      const tokenizeInlineContent = (blocks: Token[]): void => {
+        for (const token of blocks) {
+          switch (token.type) {
+            case 'html':
+              htmlScope.write(token.raw);
+              break;
+            case 'paragraph':
+            case 'heading':
+            case 'text':
+              Object.assign(token, { tokens: inlineLexer.inlineTokens(token.text) });
+              break;
+            case 'blockquote':
+              tokenizeInlineContent(token.tokens ?? []);
+              break;
+            case 'list':
+              for (const item of token.items) tokenizeInlineContent(item.tokens);
+              break;
+            case 'table':
+              for (const cell of [...token.header, ...token.rows.flat()]) {
+                cell.tokens = inlineLexer.inlineTokens(cell.text);
+              }
+              break;
+            case 'mathBlock':
+              (token as MediaToken).inHtml = htmlDepth > 0;
+              break;
+          }
+        }
+      };
+      tokenizeInlineContent(tokens);
+      htmlScope.end();
+    }
+    const mediaTokens: Token[] = [];
+    parser.walkTokens(tokens, (token) => {
+      mediaTokens.push(token);
     });
+    for (const token of mediaTokens) {
+      if (token.type === 'mathBlock' || token.type === 'mathInline') {
+        const media = token as MediaToken;
+        if (media.inHtml) continue;
+        try {
+          const image = await this.getFormulaRenderer(services?.formulaRenderer).renderToImage(
+            media.expression!,
+            media.display!,
+          );
+          formulaCount++;
+          const img = `<img src="${escapeHtmlAttribute(image)}" alt="formula" class="wm-formula-${media.display ? 'block' : 'inline'}" />`;
+          media.html = media.display ? `<p class="wm-figure">${img}</p>\n` : img;
+        } catch (error: unknown) {
+          diagnostics.push({
+            code: 'FORMULA_RENDER_FAILED',
+            severity: 'warning',
+            message: `Failed to render ${media.display ? 'block' : 'inline'} formula: ${errorMessage(error)}`,
+          });
+        }
+      } else if (
+        renderMermaid &&
+        token.type === 'code' &&
+        token.lang?.split(/\s+/)[0] === 'mermaid'
+      ) {
+        try {
+          const image = await this.getMermaidRenderer(services?.mermaidRenderer).renderToImage(
+            token.text,
+          );
+          mermaidCount++;
+          Object.assign(token, {
+            type: 'html',
+            text: `<p class="wm-figure"><img src="${escapeHtmlAttribute(image)}" alt="mermaid-diagram" class="wm-mermaid" /></p>\n`,
+          });
+        } catch (error: unknown) {
+          diagnostics.push({
+            code: 'MERMAID_RENDER_FAILED',
+            severity: 'warning',
+            message: `Failed to render Mermaid diagram, falling back to code block: ${errorMessage(error)}`,
+          });
+          token.lang = 'text';
+        }
+      }
+    }
+    let rawHtml = parser.parser(tokens);
 
     // 7. Process GFM Alerts
     if (gfmAlerts) {
@@ -331,34 +417,26 @@ export class WechatMarkdownEngine {
       rawHtml += '\n' + renderFootnotesHtml(footnotes);
     }
 
-    // 11. Async Image Resolver Hook & Collect Images
-    const imgRegex = /<img\s+[^>]*src="([^"]+)"[^>]*>/g;
-    let match;
-    while ((match = imgRegex.exec(rawHtml)) !== null) {
-      images.push(match[1]);
-    }
-
-    if (resolveImage) {
-      const replacements: [string, string][] = [];
-      for (const src of images) {
-        try {
-          const resolved = await resolveImage(src);
-          if (resolved && resolved !== src) {
-            replacements.push([src, resolved]);
-          }
-        } catch (err: any) {
-          diagnostics.push({
-            code: 'IMAGE_RESOLVE_FAILED',
-            severity: 'warning',
-            message: `Failed to resolve image ${src}: ${err.message}`,
-          });
-        }
-      }
-
-      for (const [original, target] of replacements) {
-        rawHtml = rawHtml.split(original).join(target);
+    // Resolve actual image nodes individually; identical sources may have distinct captions.
+    const fragment = load(rawHtml, {}, false);
+    for (const node of fragment('img').toArray()) {
+      const image = fragment(node);
+      const src = image.attr('src');
+      if (src === undefined) continue;
+      images.push(src);
+      if (!resolveImage) continue;
+      try {
+        const resolved = await resolveImage(src, image.attr('alt'));
+        if (resolved) image.attr('src', resolved);
+      } catch (error: unknown) {
+        diagnostics.push({
+          code: 'IMAGE_RESOLVE_FAILED',
+          severity: 'warning',
+          message: `Failed to resolve image ${src}: ${errorMessage(error)}`,
+        });
       }
     }
+    rawHtml = fragment.html();
 
     // 12. Inline CSS & WeChat DOM Patching
     const finalHtml = inlineWechatCss(rawHtml, {

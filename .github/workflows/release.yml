@@ -1,43 +1,202 @@
-name: Release
+name: Scheduled Release
 
 on:
-  push:
-    branches:
-      - main
+  schedule:
+    # Friday 15:00 Asia/Singapore (UTC+8) -> 07:00 UTC.
+    - cron: '0 7 * * 5'
   workflow_dispatch:
 
 permissions:
-  contents: write
-  id-token: write
-  issues: write
-  packages: write
-  pull-requests: write
+  contents: read
+
+env:
+  TZ: Asia/Singapore
+  CI: 'true'
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
 
 jobs:
-  release:
-    name: Semantic Release to npm
+  verify:
+    if: vars.RELEASE_ENABLED == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      artifact-id: ${{ steps.artifact.outputs.artifact-id }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Validate release entrypoint
+        id: gate
+        shell: bash
+        env:
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$RELEASE_REF" != 'refs/heads/main' ]; then
+            echo '::error::Release requires main.'
+            exit 1
+          fi
+          case "$RELEASE_EVENT" in
+            schedule|workflow_dispatch) ;;
+            *) echo '::error::Unsupported release event.'; exit 1 ;;
+          esac
+
+      - name: Checkout candidate and release history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Set up release-compatible Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
-          node-version: 24.10.0
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@rbbtsn0w'
+          node-version: '24'
 
-      - name: Install dependencies
+      - name: Use trusted-publishing npm
+        run: npm install -g npm@11.21.0 --ignore-scripts
+
+      - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Build TypeScript
-        run: npm run build
+      # Adapt checks/build and define test:package to exercise the packed public API.
+      - name: Verify candidate
+        id: verify
+        timeout-minutes: 15
+        run: |
+          npm run typecheck
+          npm run lint
+          npm test -- --testTimeout=15000
+          npm run build
+          node --test test/release-*.test.mjs
+          npm run format:check
 
-      - name: Run Semantic Release
+      - name: Pack and validate actual package
+        id: package
         env:
+          NPM_CONFIG_IGNORE_SCRIPTS: 'true'
+          CANDIDATE_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p release-input
+          npm pack --ignore-scripts --json --pack-destination release-input > "$RUNNER_TEMP/pack.json"
+          node -e 'const fs=require("fs"),path=require("path");const rows=JSON.parse(fs.readFileSync(path.join(process.env.RUNNER_TEMP,"pack.json")));if(rows.length!==1)throw Error("Expected one package");fs.renameSync(path.join("release-input",rows[0].filename),"release-input/package.tgz");'
+          npx --no-install publint release-input/package.tgz --strict
+          (cd release-input && shasum -a 256 package.tgz > package.tgz.sha256)
+          npm run test:package -- "$PWD/release-input/package.tgz"
+          (cd release-input && shasum -a 256 -c package.tgz.sha256)
+          printf '%s\n' "$CANDIDATE_SHA" > release-input/candidate.sha
+
+      - name: Hand off verified package
+        id: artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: npm-package-${{ github.sha }}-${{ github.run_attempt }}
+          path: release-input/
+          if-no-files-found: error
+          retention-days: 7
+
+  audit:
+    name: Production dependency audit
+    if: vars.RELEASE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up audit runtime
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24'
+      - name: Audit production dependencies with bounded retries
+        run: |
+          for attempt in 1 2 3; do
+            if npm run audit:prod; then exit 0; fi
+            if [ "$attempt" -lt 3 ]; then sleep 5; fi
+          done
+          exit 1
+
+  release:
+    needs: [verify, audit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: vars.RELEASE_ENABLED == 'true' && needs.verify.result == 'success' && needs.audit.result == 'success' && needs.verify.outputs.artifact-id != ''
+    permissions:
+      packages: write
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: Checkout candidate and release history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up release-compatible Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '24'
+
+      - name: Use trusted-publishing npm
+        run: npm install -g npm@11.21.0 --ignore-scripts
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund --ignore-scripts
+
+      - name: Download this run's verified package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.verify.outputs.artifact-id }}
+          path: release-input
+          merge-multiple: true
+
+      - name: Verify and restore package payload
+        id: restore
+        env:
+          CANDIDATE_SHA: ${{ github.sha }}
+        run: |
+          test "$(cat release-input/candidate.sha)" = "$CANDIDATE_SHA"
+          (cd release-input && shasum -a 256 -c package.tgz.sha256)
+          mkdir -p release-input/unpacked
+          tar -xzf release-input/package.tgz -C release-input/unpacked
+          npx --no-install publint release-input/unpacked/package --pack false --strict
+
+      - name: Publish verified candidate
+        id: publish
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx --yes semantic-release
+          # npm may update package.json's version, but must never rebuild the payload.
+          NPM_CONFIG_IGNORE_SCRIPTS: 'true'
+        run: |
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          live_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          if [ -z "$live_sha" ] || [ "$live_sha" != "$CANDIDATE_SHA" ]; then
+            echo '::error::Main changed or could not be read; rerun verification on a fresh candidate.'
+            exit 1
+          fi
+          npx --no-install semantic-release
+          if test -f release-input/released-version; then echo 'released=true' >> "$GITHUB_OUTPUT"; fi
+
+      - name: Preserve final payload and per-target receipts
+        if: always() && steps.publish.outcome != 'skipped'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-receipts-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            release-input/final.tgz
+            release-input/final.json
+            release-input/receipts/
+          if-no-files-found: warn
+          retention-days: 30

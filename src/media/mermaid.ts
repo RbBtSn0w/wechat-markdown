@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 import pako from 'pako';
 import sharp from 'sharp';
+import { errorMessage } from '../errors';
 
 export interface MermaidRendererOptions {
   timeoutMs?: number;
@@ -64,7 +65,7 @@ export class MermaidRenderer {
       `https://kroki.io/mermaid/svg/${result}`,
     ];
 
-    let lastError: any = null;
+    let lastError: unknown;
 
     for (const url of urls) {
       for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
@@ -83,9 +84,9 @@ export class MermaidRenderer {
           }
 
           return targetPath;
-        } catch (err: any) {
+        } catch (err: unknown) {
           lastError = err;
-          const status = err?.response?.status;
+          const status = axios.isAxiosError(err) ? err.response?.status : undefined;
           // Fail fast on client errors (4xx) other than rate limiting (429)
           if (status && status >= 400 && status < 500 && status !== 429) {
             break;
@@ -98,8 +99,6 @@ export class MermaidRenderer {
       }
     }
 
-    throw new Error(
-      `Failed to render Mermaid diagram after retries: ${lastError?.message || 'Unknown error'}`,
-    );
+    throw new Error(`Failed to render Mermaid diagram after retries: ${errorMessage(lastError)}`);
   }
 }
