@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderMarkdownToWechat, WechatMarkdownEngine, getTheme, listThemes } from '../src';
+import { renderMarkdownToWechat, listThemes } from '../src';
 
 describe('WechatMarkdownEngine Test Suite', () => {
   it('renders standard Markdown with front-matter into inline WeChat HTML', async () => {

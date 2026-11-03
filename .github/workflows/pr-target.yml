@@ -4,22 +4,25 @@ on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
 
+permissions:
+  contents: read
+
 jobs:
   validate-base:
     name: Validate base branch
     runs-on: ubuntu-latest
     steps:
-      - name: Check target branch
+      - name: Check target branch and repository identity
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          REPOSITORY: ${{ github.repository }}
         run: |
-          if [ "${BASE_REF}" = "main" ]; then
-            if [ "${HEAD_REF}" = "develop" ]; then
-              echo "Allowing release PR: develop -> main"
-              exit 0
-            fi
-            echo "::error::PRs directly targeting 'main' are not allowed. Please change the base branch to 'develop'."
-            exit 1
+          if [ "$BASE_REF" = 'develop' ]; then exit 0; fi
+          if [ "$BASE_REF" = 'main' ] && [ "$HEAD_REF" = 'develop' ] && [ "$HEAD_REPOSITORY" = "$REPOSITORY" ]; then
+            echo 'Verified same-repository release PR: develop -> main'
+            exit 0
           fi
-          echo "Base branch '${BASE_REF}' is allowed."
+          echo '::error::Only same-repository develop -> main release PRs may target main; ordinary PRs must target develop.'
+          exit 1

@@ -1,4 +1,6 @@
 import juice from 'juice';
+import { load } from 'cheerio';
+import { validateSiteUrl } from '../urls';
 import { sanitizeWechatHtml, patchWechatListBullets, cleanWechatAttributes } from './dom-patcher';
 import { getTheme } from '../themes';
 import { ThemeConfig } from '../types';
@@ -16,19 +18,25 @@ export interface InlineOptions {
 }
 
 export function inlineWechatCss(html: string, options: InlineOptions = {}): string {
-  // 1. Sanitize
-  let processedHtml = sanitizeWechatHtml(html);
-
-  // 2. Resolve relative URLs if siteUrl is specified
-  if (options.siteUrl) {
-    const base = options.siteUrl.replace(/\/$/, '');
-    processedHtml = processedHtml.replace(
-      /(<a\s+[^>]*href=")(\/[^"]*)(")/g,
-      (match, p1, p2, p3) => {
-        return `${p1}${base}${p2}${p3}`;
-      },
-    );
+  const base = validateSiteUrl(options.siteUrl);
+  let resolvedHtml = html;
+  if (base) {
+    const fragment = load(html, {}, false);
+    fragment('a[href]').each((_, node) => {
+      const anchor = fragment(node);
+      const href = anchor.attr('href')!;
+      if (href.startsWith('/') && !href.startsWith('//')) {
+        try {
+          anchor.attr('href', new URL(href, base).href);
+        } catch {
+          // Invalid article links lose navigation but must not discard the article.
+          anchor.removeAttr('href');
+        }
+      }
+    });
+    resolvedHtml = fragment.html();
   }
+  const processedHtml = sanitizeWechatHtml(resolvedHtml);
 
   // 3. Wrap in container for CSS matching
   const wrappedHtml = `<div class="markdown-body">${processedHtml}</div>`;

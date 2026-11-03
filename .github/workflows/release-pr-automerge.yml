@@ -1,0 +1,38 @@
+name: Release PR auto-merge
+
+on:
+  workflow_run:
+    workflows: [CI, PR Target Branch, Release]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+jobs:
+  merge:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.repository.full_name == github.repository && (github.event.workflow_run.event == 'pull_request' || (github.event.workflow_run.name == 'CI' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'develop') || (github.event.workflow_run.name == 'Release' && github.event.workflow_run.head_branch == 'main' && (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch')))
+    runs-on: ubuntu-latest
+    steps:
+      # Never check out code or execute scripts from the triggering PR.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/create-github-app-token@v2
+        id: bot
+        with:
+          app-id: ${{ vars.RBBTSN0W_BOT_APP_ID }}
+          private-key: ${{ secrets.RBBTSN0W_BOT_PRIVATE_KEY }}
+      - name: Verify current head and required CI before merge
+        env:
+          GH_TOKEN: ${{ steps.bot.outputs.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_PATH: ${{ github.event_path }}
+        run: |
+          node scripts/release/automerge.cjs

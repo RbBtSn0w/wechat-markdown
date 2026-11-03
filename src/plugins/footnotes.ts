@@ -1,4 +1,5 @@
 import { FootnoteItem } from '../types';
+import { validateSiteUrl } from '../urls';
 
 /**
  * Structural styling for the markup this plugin emits. See the note on
@@ -52,6 +53,7 @@ export function processMarkdownFootnotes(
   markdown: string,
   siteUrl?: string,
 ): ProcessFootnotesResult {
+  const base = validateSiteUrl(siteUrl);
   const footnotes: FootnoteItem[] = [];
   const urlMap = new Map<string, number>();
 
@@ -64,7 +66,11 @@ export function processMarkdownFootnotes(
     if (/^https?:\/\/([a-zA-Z0-9-]+\.)*mp\.weixin\.qq\.com(\/|$)/i.test(url)) {
       return false;
     }
-    if (siteUrl && url.startsWith(siteUrl)) {
+    try {
+      const parsed = new URL(url);
+      if (base && parsed.origin === base.origin) return false;
+    } catch {
+      // Malformed links belong to the Markdown fallback, not the footnote list.
       return false;
     }
     if (url.startsWith('/') && !url.startsWith('//')) {

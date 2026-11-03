@@ -4,26 +4,8 @@
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
     "@semantic-release/changelog",
-    [
-      "@semantic-release/npm",
-      {
-        "pkgRoot": "."
-      }
-    ],
-    [
-      "@semantic-release/exec",
-      {
-        "shell": true,
-        "publishCmd": "NODE_AUTH_TOKEN=$GITHUB_TOKEN npm publish . --registry=https://npm.pkg.github.com"
-      }
-    ],
-    [
-      "@semantic-release/git",
-      {
-        "assets": ["package.json", "CHANGELOG.md"],
-        "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
-      }
-    ],
+    ["@semantic-release/npm", { "npmPublish": false }],
+    "./scripts/release/plugin.cjs",
     "@semantic-release/github"
   ]
 }

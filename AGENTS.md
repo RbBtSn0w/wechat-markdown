@@ -8,7 +8,7 @@ Welcome, Agent. This document defines the authoritative, non-negotiable operatin
 
 - **Package**: `@rbbtsn0w/wechat-markdown`
 - **Domain**: High-fidelity Markdown to WeChat Official Account HTML converter SDK & middleware.
-- **Runtime & Stack**: Node.js 20+ / TypeScript 5.9+, CommonJS build output (`dist/`).
+- **Runtime & Stack**: Node.js 22.14+ / TypeScript 5.9+, CommonJS build output (`dist/`).
 - **Core Engine Stack**:
   - `marked`: AST parsing, custom tokenizers, and custom renderer hooks.
   - `juice`: Post-render CSS computing and node-level style inlining.
@@ -23,11 +23,11 @@ Welcome, Agent. This document defines the authoritative, non-negotiable operatin
 
 This repository adheres to an automated dual-branch release train (`develop` / `main`). Every agent must respect this hierarchy without exception:
 
-| Branch               | Role                           | Rules & Constraints                                                                                                                                                                                                              |
-| :------------------- | :----------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `develop`            | **Primary Development Trunk**  | All feature, fix, refactor, and chore PRs **must** target `develop`. Direct pushes are forbidden; branches must pass full CI.                                                                                                    |
-| `main`               | **Production Release Trunk**   | Protected branch. Receives code **only** via scheduled Friday release train PRs (`develop -> main`). Direct commits, ad-hoc PRs, and force-pushes are strictly blocked by `.github/workflows/pr-target.yml` and GitHub Rulesets. |
-| `feature/*`, `fix/*` | **Ephemeral Working Branches** | Branch off `develop`, submit PRs targeting `develop`.                                                                                                                                                                            |
+| Branch               | Role                           | Rules & Constraints                                                                                                                                                                                                                                                                                                                                                                           |
+| :------------------- | :----------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `develop`            | **Primary Development Trunk**  | All feature, fix, refactor, and chore PRs **must** target `develop`. Direct pushes are forbidden; branches must pass full CI. Post-release reverse sync also uses a verified PR.                                                                                                                                                                                                              |
+| `main`               | **Production Release Trunk**   | Protected branch. Receives code **only** via scheduled Friday release train PRs (`develop -> main`). The sole direct-commit exception is validated release metadata (`package.json` version, lockfile versions, and `CHANGELOG.md`) written by the trusted release workflow. Code changes, ad-hoc PRs, and force-pushes are blocked by `.github/workflows/pr-target.yml` and GitHub Rulesets. |
+| `feature/*`, `fix/*` | **Ephemeral Working Branches** | Branch off `develop`, submit PRs targeting `develop`.                                                                                                                                                                                                                                                                                                                                         |
 
 ### Key Release Workflows
 
@@ -36,12 +36,12 @@ This repository adheres to an automated dual-branch release train (`develop` / `
    - Explicitly permits only automated release PRs (`develop -> main`).
 2. **Weekly Release Train** (`.github/workflows/scheduled-release-pr.yml`):
    - Fires every Friday at 15:00 Beijing time (UTC+8 / `0 7 * * 5` UTC).
-   - Inspects `main..develop` diff. If changes exist, opens a release PR with `--auto --squash`.
+   - Inspects `main..develop` diff. If changes exist, opens a release PR with SHA-bound auto-merge using a merge commit.
 3. **Official Production Release** (`.github/workflows/release.yml`):
    - Runs exclusively on pushes to `main`.
    - Uses npm Trusted Publishing (OIDC) to publish stable releases to npm and `GITHUB_TOKEN` for GitHub Packages under `@rbbtsn0w`.
 4. **Post-Release Reverse Sync** (`.github/workflows/sync-main-to-develop.yml`):
-   - Automatically merges `main` back into `develop` post-release with `[skip ci]`, keeping development in sync with official release tags and changelogs.
+   - Runs only after both registries are verified, creates a `release-sync/<releaseSHA> -> develop` sync PR, and requires CI before merging. It never directly pushes to `develop`.
 5. **PR Dev Previews** (in `.github/workflows/ci.yml`):
    - Every PR targeting `develop` automatically builds an ephemeral preview build (`<version>-dev.pr<num>.<sha>`) and posts a sticky verification comment.
 
@@ -145,3 +145,13 @@ When addressing code review comments or executing `/gh-address-cr`:
   - Never execute destructive git commands (`git reset --hard`, `git push --force`, `git clean -f`).
   - Never stage (`git add`) or push (`git push`) unless explicitly requested by the developer.
   - Keep the working directory clean and verify `git status` before and after operations.
+
+## 8. Runtime and Release Activation
+
+- Source and test types target Node.js 22; the CI matrix covers 22.14.0, current 22, and current 24. Stable releases and PR previews run on Node.js 24.
+- Required checks are `Verify gate` and `Validate base branch`; the former aggregates the complete build matrix and isolated production audit.
+- Use `GITHUB_TOKEN` by default. The existing `rbbtsn0w-bot` is reserved for automatic PR events and the protected-branch metadata exception that the default token cannot satisfy. Its private key is never exposed to PR workflows.
+- The source-controlled rules proposal is reviewable preparation; do not claim live rules are active without inspecting GitHub after an explicitly authorized activation.
+- The next release includes breaking runtime and metadata typing changes. Its promotion must retain a Conventional Commits `BREAKING CHANGE:` declaration; do not publish it as a patch.
+- Run `npm run format:check` and `npm run verify:package` in addition to the mandatory commands above. Registry verification and the first normal release remain separate remote acceptance evidence.
+- See `docs/release-train.md` and `docs/migration-v2.md` for activation, recovery, compatibility, and rollback boundaries.
