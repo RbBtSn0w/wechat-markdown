@@ -72,7 +72,7 @@
     "@types/sanitize-html": "^2.16.0",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
-    "eslint": "^8.57.1",
+    "eslint": "^10.14.0",
     "ip-address": "^10.7.3",
     "prettier": "^3.8.1",
     "semantic-release": "^25.0.0",
