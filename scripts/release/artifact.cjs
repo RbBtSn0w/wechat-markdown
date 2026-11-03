@@ -43,24 +43,33 @@ function manifest(tarball, run = execute) {
   }
 }
 
-function registryAdapter(receipt, directory = output, run = execute) {
+function registryAdapter(
+  receipt,
+  directory = output,
+  run = execute,
+  wait = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)),
+) {
   return {
-    async inspect(key) {
+    async inspect(key, { attempts = 1, delayMs = 10000 } = {}) {
       const registry = registries[key];
-      try {
-        run('npm', [
-          'view',
-          `${receipt.name}@${receipt.version}`,
-          'dist.integrity',
-          '--registry',
-          registry,
-          '--json',
-        ]);
-      } catch (error) {
-        // Only a registry E404 is absence. Authentication, networking and rate limits fail closed.
-        const detail = String(error.stderr || error.message);
-        if (/\bE404\b/.test(detail)) return null;
-        throw error;
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          run('npm', [
+            'view',
+            `${receipt.name}@${receipt.version}`,
+            'dist.integrity',
+            '--registry',
+            registry,
+            '--json',
+          ]);
+          break;
+        } catch (error) {
+          // Only E404 may reflect propagation delay; all other errors fail closed.
+          const detail = String(error.stderr || error.message);
+          if (!/\bE404\b/.test(detail)) throw error;
+          if (attempt >= attempts) return null;
+          await wait(delayMs);
+        }
       }
       const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'release-registry-'));
       try {

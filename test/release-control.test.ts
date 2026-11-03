@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const {
@@ -34,6 +34,22 @@ function registryAdapter(existing: Record<string, unknown> = {}, failed = '') {
   };
 }
 describe('release control', () => {
+  it('enables propagation polling only after publishing a missing version', async () => {
+    const inspect = vi.fn(async (_registry: string, options?: { attempts: number }) =>
+      options?.attempts === 6 ? manifest : null,
+    );
+    const publish = vi.fn(async () => {});
+    await expect(publishRegistries(receipt(), { inspect, publish })).resolves.toMatchObject({
+      registries: { npm: 'verified', github: 'verified' },
+    });
+    expect(inspect.mock.calls).toEqual([
+      ['npm'],
+      ['npm', { attempts: 6 }],
+      ['github'],
+      ['github', { attempts: 6 }],
+    ]);
+    expect(publish).toHaveBeenCalledTimes(2);
+  });
   it('propagates unique issue-closing references from commits and associated PR bodies', () => {
     expect(
       extractClosingReferences([
@@ -157,19 +173,38 @@ describe('release control', () => {
     const evidence = {
       ...receipt(),
       releaseSHA: sha,
+      syncBranch: `release-sync/${sha}`,
       syncPR: 12,
       syncAuthorizationRunId: '234',
       syncAuthorizationSHA: sha,
       registries: { npm: 'verified', github: 'verified' },
     };
     expect(() =>
-      validateSyncAuthorization(undefined, run, 'RbBtSn0w/wechat-markdown', 12, sha),
+      validateSyncAuthorization(
+        undefined,
+        run,
+        'RbBtSn0w/wechat-markdown',
+        12,
+        `release-sync/${sha}`,
+      ),
     ).toThrow('authorization');
     expect(() =>
-      validateSyncAuthorization(evidence, run, 'RbBtSn0w/wechat-markdown', 12, 'b'.repeat(40)),
+      validateSyncAuthorization(
+        evidence,
+        run,
+        'RbBtSn0w/wechat-markdown',
+        12,
+        `release-sync/${'b'.repeat(40)}`,
+      ),
     ).toThrow('authorization');
     expect(() =>
-      validateSyncAuthorization(evidence, run, 'RbBtSn0w/wechat-markdown', 12, sha),
+      validateSyncAuthorization(
+        evidence,
+        run,
+        'RbBtSn0w/wechat-markdown',
+        12,
+        `release-sync/${sha}`,
+      ),
     ).not.toThrow();
   });
   it('allows only version metadata changes, including package-lock root version', () => {

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, copyFileSync, rmSync } from 'node:fs';
@@ -25,6 +25,50 @@ function fixture() {
   return { directory, tarball };
 }
 describe('release artifact boundary', () => {
+  it('waits for post-publish metadata propagation before downloading and verifying content', async () => {
+    const { tarball } = fixture();
+    const wait = vi.fn(async () => {});
+    let views = 0;
+    const adapter = registryAdapter(
+      { name: 'pkg', version: '2.0.0' },
+      '.',
+      (command: string, args: string[]) => {
+        if (command === 'tar') return execFileSync(command, args, { encoding: 'utf8' });
+        if (args[0] === 'view' && ++views < 3)
+          throw Object.assign(new Error('missing'), { stderr: 'E404 not found' });
+        if (args[0] === 'pack') {
+          copyFileSync(tarball, join(args[args.indexOf('--pack-destination') + 1], 'download.tgz'));
+          return JSON.stringify([{ filename: 'download.tgz' }]);
+        }
+        return '"integrity"';
+      },
+      wait,
+    );
+    expect(await adapter.inspect('npm', { attempts: 6 })).toEqual(manifest(tarball).files);
+    expect(views).toBe(3);
+    expect(wait.mock.calls).toEqual([[10000], [10000]]);
+  });
+  it('bounds propagation retries and never retries authentication failures', async () => {
+    const wait = vi.fn(async () => {});
+    const missing = vi.fn(() => {
+      throw Object.assign(new Error('missing'), { stderr: 'E404 not found' });
+    });
+    const absent = registryAdapter({}, '.', missing, wait);
+    expect(await absent.inspect('npm')).toBeNull();
+    expect(missing).toHaveBeenCalledTimes(1);
+    expect(wait).not.toHaveBeenCalled();
+    expect(await absent.inspect('npm', { attempts: 3 })).toBeNull();
+    expect(missing).toHaveBeenCalledTimes(4);
+    expect(wait).toHaveBeenCalledTimes(2);
+    const denied = vi.fn(() => {
+      throw Object.assign(new Error('denied'), { stderr: 'E401 unauthorized' });
+    });
+    await expect(
+      registryAdapter({}, '.', denied, wait).inspect('npm', { attempts: 6 }),
+    ).rejects.toThrow('denied');
+    expect(denied).toHaveBeenCalledTimes(1);
+    expect(wait).toHaveBeenCalledTimes(2);
+  });
   it('downloads and compares registry package contents, not publication receipt claims', async () => {
     const { tarball } = fixture();
     const commands: string[][] = [];
@@ -164,12 +208,12 @@ describe('workflow completion subscriptions', () => {
     };
     const candidate = {
       number: 12,
-      head: { ref: 'main', sha, repo: { id: 1 } },
+      head: { ref: `release-sync/${sha}`, sha, repo: { id: 1 } },
       base: { ref: 'develop', repo: { id: 1 } },
     };
     const info = {
       baseRefName: 'develop',
-      headRefName: 'main',
+      headRefName: `release-sync/${sha}`,
       headRefOid: sha,
       isCrossRepository: false,
       mergeable: 'MERGEABLE',
@@ -180,6 +224,7 @@ describe('workflow completion subscriptions', () => {
       file('receipt.json'),
       JSON.stringify({
         releaseSHA: sha,
+        syncBranch: `release-sync/${sha}`,
         syncPR: 12,
         syncAuthorizationRunId: '234',
         syncAuthorizationSHA: sourceSHA,
@@ -196,23 +241,26 @@ const read = (name) => JSON.parse(fs.readFileSync(process.env.TEST_DIRECTORY + '
 if (args[0] === 'api') {
   const endpoint = args[1];
   let result;
-  if (endpoint.endsWith('/actions/workflows/release.yml')) result = { id: 9 };
+  if (endpoint.includes('/git/ref/heads/')) result = { object: { sha: '${sha}' } };
+  else if (endpoint.endsWith('/actions/workflows/release.yml')) result = { id: 9 };
   else if (endpoint.includes('/actions/workflows/release.yml/runs?')) result = { workflow_runs: [read('run.json')] };
   else if (endpoint.endsWith('/artifacts')) result = { artifacts: [{ name: 'release-complete', expired: false }] };
   else result = { head_sha: '${sha}' };
   process.stdout.write(JSON.stringify(result));
 } else if (args[0] === 'run') {
   fs.copyFileSync(process.env.TEST_DIRECTORY + '/receipt.json', args[args.indexOf('--dir') + 1] + '/receipt.json');
-} else if (args[1] === 'view') process.stdout.write(JSON.stringify(read('pr.json')));
+} else if (args[1] === 'list') process.stdout.write(JSON.stringify([{ number: 13, ...read('pr.json') }, { number: 12, ...read('pr.json') }]));
+else if (args[1] === 'view') process.stdout.write(JSON.stringify(read('pr.json')));
 else if (args[1] === 'merge') fs.appendFileSync(process.env.TEST_DIRECTORY + '/merged', 'merged\\n');
 else throw new Error('Unexpected external call');
 `,
       { mode: 0o755 },
     );
+    writeFileSync(file('git'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
     const workflows = require('yaml').parse(
       require('node:fs').readFileSync('.github/workflows/release-pr-automerge.yml', 'utf8'),
     ).on.workflow_run.workflows as string[];
-    const invoke = (name: string) => {
+    const invoke = (name: string, developPush = false) => {
       if (!workflows.includes(name)) return;
       writeFileSync(
         file('event.json'),
@@ -220,7 +268,13 @@ else throw new Error('Unexpected external call');
           workflow_run:
             name === 'Release'
               ? releaseRun
-              : { id: name === 'CI' ? 100 : 101, name, pull_requests: [candidate] },
+              : {
+                  id: name === 'CI' ? 100 : 101,
+                  name,
+                  event: developPush ? 'push' : 'pull_request',
+                  head_branch: developPush ? 'develop' : candidate.head.ref,
+                  pull_requests: developPush ? [] : [candidate],
+                },
         }),
       );
       execFileSync(process.execPath, ['scripts/release/automerge.cjs'], {
@@ -236,6 +290,7 @@ else throw new Error('Unexpected external call');
       });
     };
     invoke('CI');
+    invoke('CI', true);
     invoke('Release');
     expect(require('node:fs').existsSync(file('merged'))).toBe(false);
     info.statusCheckRollup.push({

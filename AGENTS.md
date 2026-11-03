@@ -41,7 +41,7 @@ This repository adheres to an automated dual-branch release train (`develop` / `
    - Runs exclusively on pushes to `main`.
    - Uses npm Trusted Publishing (OIDC) to publish stable releases to npm and `GITHUB_TOKEN` for GitHub Packages under `@rbbtsn0w`.
 4. **Post-Release Reverse Sync** (`.github/workflows/sync-main-to-develop.yml`):
-   - Runs only after both registries are verified, creates a `main -> develop` sync PR, and requires CI before merging. It never directly pushes to `develop`.
+   - Runs only after both registries are verified, creates a `release-sync/<releaseSHA> -> develop` sync PR, and requires CI before merging. It never directly pushes to `develop`.
 5. **PR Dev Previews** (in `.github/workflows/ci.yml`):
    - Every PR targeting `develop` automatically builds an ephemeral preview build (`<version>-dev.pr<num>.<sha>`) and posts a sticky verification comment.
 

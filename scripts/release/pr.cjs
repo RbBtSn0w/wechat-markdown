@@ -8,6 +8,16 @@ const {
   validateSyncAuthorization,
 } = require('./control.cjs');
 const artifact = require('./artifact.cjs');
+const { syncBranch, refreshSyncBranch } = require('./sync.cjs');
+const api = (endpoint, fields) => {
+  const args = ['api', `repos/${repository}/${endpoint}`];
+  if (fields) {
+    args.push('--method', 'POST');
+    for (const [key, value] of Object.entries(fields)) args.push('-f', `${key}=${value}`);
+  }
+  const result = (fields ? gh : readGH)(...args);
+  return result ? JSON.parse(result) : null;
+};
 const run = (command, args) =>
   execFileSync(command, args, { encoding: 'utf8', env: process.env }).trim();
 const gh = (...args) => run('gh', args);
@@ -22,9 +32,9 @@ const requiredChecks = ['Verify gate', 'Validate base branch'];
 async function create(kind) {
   const release = kind === 'release';
   const base = release ? 'main' : 'develop';
-  const head = release ? 'develop' : 'main';
-  if (!process.env.GH_TOKEN) throw new Error('Missing App token for PR CI trigger');
   const receipt = release ? null : artifact.load();
+  const head = release ? 'develop' : syncBranch(receipt.releaseSHA);
+  if (!process.env.GH_TOKEN) throw new Error('Missing App token for PR CI trigger');
   if (receipt && !['npm', 'github'].every((key) => receipt.registries[key] === 'verified'))
     throw new Error('Sync requires verified registries');
   if (receipt) {
@@ -32,6 +42,18 @@ async function create(kind) {
       .sha;
     if (currentSHA !== receipt.releaseSHA)
       throw new Error('Sync main head differs from verified release SHA');
+    const comparison = api(`compare/${receipt.releaseSHA}...develop`);
+    if (['ahead', 'identical'].includes(comparison.status)) {
+      receipt.syncPR = null;
+      artifact.save(receipt);
+      console.log('Verified release is already present in develop');
+      return;
+    }
+    receipt.syncBranch = head;
+    // Reuse an existing branch only after its complete graph is verified below.
+    const refs = api(`git/matching-refs/heads/${head}`);
+    if (!refs.some((entry) => entry.ref === `refs/heads/${head}`))
+      api('git/refs', { ref: `refs/heads/${head}`, sha: receipt.releaseSHA });
   }
   const prs = JSON.parse(
     readGH(
@@ -107,6 +129,7 @@ async function create(kind) {
     receipt.syncAuthorizationSHA = process.env.GITHUB_SHA;
     receipt.syncPR = number;
     artifact.save(receipt);
+    refreshSyncBranch(receipt, api);
   }
   console.log(`PR #${number}; merge is handled after required CI completes`);
 }
@@ -121,12 +144,14 @@ function merge(number, sha, authorization) {
       '--repo',
       repository,
       '--json',
-      'baseRefName,headRefName,headRefOid,isCrossRepository,mergeable,statusCheckRollup',
+      'state,baseRefName,headRefName,headRefOid,isCrossRepository,mergeable,statusCheckRollup',
     ),
   );
+  if (pr.state && pr.state !== 'OPEN') return false;
+  if (pr.isCrossRepository) throw new Error('Cross repository promotion forbidden');
   if (!(
     (pr.baseRefName === 'main' && pr.headRefName === 'develop') ||
-    (pr.baseRefName === 'develop' && pr.headRefName === 'main')
+    (pr.baseRefName === 'develop' && pr.headRefName.startsWith('release-sync/'))
   ))
     throw new Error('Not a release or sync PR');
   if (pr.baseRefName === 'develop')
@@ -135,8 +160,16 @@ function merge(number, sha, authorization) {
       authorization?.run || {},
       repository,
       Number(number),
-      sha,
+      pr.headRefName,
     );
+  if (pr.baseRefName === 'develop') {
+    if (pr.headRefOid !== sha) throw new Error('PR head changed');
+    const candidate = refreshSyncBranch(authorization.receipt, api);
+    if (candidate.alreadySynced || candidate.updated || candidate.sha !== sha) {
+      console.log('Sync refreshed against develop; waiting for CI on the new head');
+      return false;
+    }
+  }
   const checks = pr.statusCheckRollup || [];
   if (
     !requiredChecks.every((name) =>

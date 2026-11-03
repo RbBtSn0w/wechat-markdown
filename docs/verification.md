@@ -90,3 +90,11 @@ its trusted provenance. A later failure creating the GitHub Release display
 record requires separate repair of that record; recovery does not recompute a
 version or rewrite tags. Expired evidence or different content under an existing
 version blocks recovery.
+
+## PR #57 review remediation
+
+- Aligned `format` with the complete `format:check` scope and excluded release-sync PRs from preview publication.
+- Reproduced immediate post-publish E404 failure, then added bounded metadata propagation polling (six inspections, ten seconds apart). Pre-publish absence remains single-shot; authentication and content mismatches fail closed.
+- Replaced the fixed main sync head with a dedicated release-bound branch. Local Git graph tests cover develop advancement, repeated refreshes, untouched main, ordinary injected commits, forged merge trees, and conflicts. Trusted develop CI completion refreshes authorized candidates; new heads require fresh checks. Strict trunk rules remain unchanged.
+- Independently reviewed the authorization changes and reproduced/fixed a batch isolation issue: an unauthorized same-prefix PR must not prevent a later authorized sync candidate from refreshing.
+- Node 22.22.2: 126 tests across 11 files pass; source/test types, zero-warning lint, production audit (zero vulnerabilities), build, required/expanded formatting, and packed consumer verification pass. Audit required network access; consumer verification used an isolated temporary npm cache. No remote rules, production publishing, or real release sync was activated or claimed.

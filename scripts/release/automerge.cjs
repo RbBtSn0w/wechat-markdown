@@ -12,7 +12,7 @@ const read = (...args) =>
     encoding: 'utf8',
     env: { ...process.env, GH_TOKEN: process.env.GITHUB_TOKEN },
   });
-function syncAuthorization(number, sha) {
+function syncAuthorization(number, branch) {
   const workflow = JSON.parse(read('api', `repos/${repository}/actions/workflows/release.yml`));
   const runs = JSON.parse(
     read(
@@ -46,7 +46,7 @@ function syncAuthorization(number, sha) {
       }
       const receipt = JSON.parse(fs.readFileSync(path.join(temporary, 'receipt.json'), 'utf8'));
       try {
-        validateSyncAuthorization(receipt, run, repository, number, sha);
+        validateSyncAuthorization(receipt, run, repository, number, branch);
       } catch {
         continue;
       }
@@ -55,7 +55,10 @@ function syncAuthorization(number, sha) {
       fs.rmSync(temporary, { recursive: true, force: true });
     }
   }
-  throw new Error('No successful trusted release artifact authorizes this sync PR and head SHA');
+  throw Object.assign(
+    new Error('No successful trusted release artifact authorizes this sync PR and branch'),
+    { code: 'SYNC_AUTHORIZATION_MISSING' },
+  );
 }
 function onReleaseCompletion(run) {
   const workflow = JSON.parse(read('api', `repos/${repository}/actions/workflows/release.yml`));
@@ -84,8 +87,12 @@ function onReleaseCompletion(run) {
       temporary,
     );
     const receipt = JSON.parse(fs.readFileSync(path.join(temporary, 'receipt.json'), 'utf8'));
-    validateSyncAuthorization(receipt, run, repository, receipt.syncPR, receipt.releaseSHA);
-    merge(String(receipt.syncPR), receipt.releaseSHA, { receipt, run });
+    if (!receipt.syncPR) return;
+    validateSyncAuthorization(receipt, run, repository, receipt.syncPR, receipt.syncBranch);
+    const pr = JSON.parse(
+      read('pr', 'view', String(receipt.syncPR), '--repo', repository, '--json', 'headRefOid'),
+    );
+    merge(String(receipt.syncPR), pr.headRefOid, { receipt, run });
   } finally {
     fs.rmSync(temporary, { recursive: true, force: true });
   }
@@ -93,10 +100,36 @@ function onReleaseCompletion(run) {
 if (event.workflow_run.name === 'Release') {
   onReleaseCompletion(event.workflow_run);
 } else {
-  for (const candidate of event.workflow_run.pull_requests) {
+  const refresh =
+    event.workflow_run.event === 'push' && event.workflow_run.head_branch === 'develop';
+  const candidates = refresh
+    ? JSON.parse(
+        read(
+          'pr',
+          'list',
+          '--repo',
+          repository,
+          '--base',
+          'develop',
+          '--state',
+          'open',
+          '--limit',
+          '100',
+          '--json',
+          'number,headRefName,headRefOid,isCrossRepository',
+        ),
+      )
+        .filter((pr) => !pr.isCrossRepository && pr.headRefName.startsWith('release-sync/'))
+        .map((pr) => ({
+          number: pr.number,
+          head: { ref: pr.headRefName, sha: pr.headRefOid, repo: { id: repository } },
+          base: { ref: 'develop', repo: { id: repository } },
+        }))
+    : event.workflow_run.pull_requests;
+  for (const candidate of candidates) {
     if (!(
       (candidate.base.ref === 'main' && candidate.head.ref === 'develop') ||
-      (candidate.base.ref === 'develop' && candidate.head.ref === 'main')
+      (candidate.base.ref === 'develop' && candidate.head.ref.startsWith('release-sync/'))
     ))
       continue;
     if (candidate.head.repo.id !== candidate.base.repo.id) continue;
@@ -104,9 +137,17 @@ if (event.workflow_run.name === 'Release') {
     const recorded = JSON.parse(
       read('api', `repos/${repository}/actions/runs/${event.workflow_run.id}`),
     );
-    if (recorded.head_sha !== sha) throw new Error('Workflow head provenance changed');
-    const authorization =
-      candidate.base.ref === 'develop' ? syncAuthorization(candidate.number, sha) : undefined;
-    merge(String(candidate.number), sha, authorization);
+    if (!refresh && recorded.head_sha !== sha) throw new Error('Workflow head provenance changed');
+    try {
+      const authorization =
+        candidate.base.ref === 'develop'
+          ? syncAuthorization(candidate.number, candidate.head.ref)
+          : undefined;
+      merge(String(candidate.number), sha, authorization);
+    } catch (error) {
+      if (!refresh) throw error;
+      console.error(`Sync PR #${candidate.number}: ${error.message}`);
+      if (error.code !== 'SYNC_AUTHORIZATION_MISSING') process.exitCode = 1;
+    }
   }
 }

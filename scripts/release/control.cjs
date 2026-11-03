@@ -1,4 +1,5 @@
 const { isDeepStrictEqual } = require('node:util');
+const { syncBranch } = require('./sync.cjs');
 
 async function publishRegistries(receipt, adapter, save = () => {}) {
   const failures = [];
@@ -8,7 +9,7 @@ async function publishRegistries(receipt, adapter, save = () => {}) {
       let actual = await adapter.inspect(registry);
       if (actual === null) {
         await adapter.publish(registry);
-        actual = await adapter.inspect(registry);
+        actual = await adapter.inspect(registry, { attempts: 6 });
       }
       if (actual === null) throw new Error(`${registry} verification failed: artifact absent`);
       if (!isDeepStrictEqual(actual, receipt.manifest))
@@ -70,11 +71,12 @@ function validatePullRequest(pr, expectedSHA, requiredChecks) {
     throw new Error('Required checks have not passed');
 }
 
-function validateSyncAuthorization(receipt, run, repository, number, sha) {
+function validateSyncAuthorization(receipt, run, repository, number, branch) {
   if (
     !receipt ||
     receipt.syncPR !== number ||
-    receipt.releaseSHA !== sha ||
+    receipt.syncBranch !== branch ||
+    receipt.syncBranch !== syncBranch(receipt.releaseSHA) ||
     receipt.syncAuthorizationRunId !== String(run.id) ||
     receipt.syncAuthorizationSHA !== run.head_sha ||
     run.conclusion !== 'success' ||
