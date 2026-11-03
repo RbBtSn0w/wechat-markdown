@@ -19,31 +19,13 @@ Welcome, Agent. This document defines the authoritative, non-negotiable operatin
 
 ---
 
-## 2. Branching & Release Train Constitution
+## 2. Branching and Release
 
-This repository adheres to an automated dual-branch release train (`develop` / `main`). Every agent must respect this hierarchy without exception:
-
-| Branch               | Role                           | Rules & Constraints                                                                                                                                                                                                                                                                                                                                                                           |
-| :------------------- | :----------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `develop`            | **Primary Development Trunk**  | All feature, fix, refactor, and chore PRs **must** target `develop`. Direct pushes are forbidden; branches must pass full CI. Post-release reverse sync also uses a verified PR.                                                                                                                                                                                                              |
-| `main`               | **Production Release Trunk**   | Protected branch. Receives code **only** via scheduled Friday release train PRs (`develop -> main`). The sole direct-commit exception is validated release metadata (`package.json` version, lockfile versions, and `CHANGELOG.md`) written by the trusted release workflow. Code changes, ad-hoc PRs, and force-pushes are blocked by `.github/workflows/pr-target.yml` and GitHub Rulesets. |
-| `feature/*`, `fix/*` | **Ephemeral Working Branches** | Branch off `develop`, submit PRs targeting `develop`.                                                                                                                                                                                                                                                                                                                                         |
-
-### Key Release Workflows
-
-1. **Target Gate Validator** (`.github/workflows/pr-target.yml`):
-   - Automatically fails any developer PR directly targeting `main`.
-   - Explicitly permits only automated release PRs (`develop -> main`).
-2. **Weekly Release Train** (`.github/workflows/scheduled-release-pr.yml`):
-   - Fires every Friday at 15:00 Beijing time (UTC+8 / `0 7 * * 5` UTC).
-   - Inspects `main..develop` diff. If changes exist, opens a release PR with SHA-bound auto-merge using a merge commit.
-3. **Official Production Release** (`.github/workflows/release.yml`):
-   - Runs exclusively on pushes to `main`.
-   - Uses npm Trusted Publishing (OIDC) to publish stable releases to npm and `GITHUB_TOKEN` for GitHub Packages under `@rbbtsn0w`.
-4. **Post-Release Reverse Sync** (`.github/workflows/sync-main-to-develop.yml`):
-   - Runs only after both registries are verified, creates a `release-sync/<releaseSHA> -> develop` sync PR, and requires CI before merging. It never directly pushes to `develop`.
-5. **PR Dev Previews** (in `.github/workflows/ci.yml`):
-   - Every PR targeting `develop` automatically builds an ephemeral preview build (`<version>-dev.pr<num>.<sha>`) and posts a sticky verification comment.
+`main` is the only integration trunk. Branch from current `origin/main` and submit
+reviewed squash PRs to `main`. Preserve Conventional Commit title/body and breaking
+change declarations. CI and PRs never publish; the default-off scheduled/manual
+workflow owns stable npmjs + GitHub Packages. See `docs/release-train.md` for
+artifact boundaries, activation blockers and partial-publication recovery.
 
 ---
 
@@ -110,7 +92,7 @@ When authoring or modifying GitHub Actions workflows or automation scripts, agen
 2. **No Interactive CLI Deadlocks**:
    - Every CLI tool invocation in CI (`npx`, `pnpm`, etc.) must pass non-interactive flags (`--yes` or `--frozen-lockfile`).
 3. **No Secret Token Injection in PR Workflows**:
-   - Never inject `NPM_TOKEN` into pull request workflows (`pr-dev-release`). PR previews must use ephemeral OIDC or scoped `GITHUB_TOKEN`.
+   - Never inject `NPM_TOKEN` into pull request workflows (`pr-dev-release`). PR workflows do not publish or receive publishing authority.
    - All `npm publish` calls in automated workflows must include `--ignore-scripts` to block lifecycle script code execution during packaging.
 4. **Unambiguous Timezones**:
    - Never use ambiguous timezone abbreviations (e.g. CST). Always pair UTC crons with explicit Beijing time comments (e.g. `# Every Friday at 15:00 Beijing time (UTC+8) -> 07:00 UTC`).
@@ -148,10 +130,10 @@ When addressing code review comments or executing `/gh-address-cr`:
 
 ## 8. Runtime and Release Activation
 
-- Source and test types target Node.js 22; the CI matrix covers 22.14.0, current 22, and current 24. Stable releases and PR previews run on Node.js 24.
+- Source and test types target Node.js 22; the CI matrix covers 22.14.0, current 22, and current 24. Stable release tooling runs on Node.js 24.
 - Required checks are `Verify gate` and `Validate base branch`; the former aggregates the complete build matrix and isolated production audit.
-- Use `GITHUB_TOKEN` by default. The existing `rbbtsn0w-bot` is reserved for automatic PR events and the protected-branch metadata exception that the default token cannot satisfy. Its private key is never exposed to PR workflows.
+- Use `GITHUB_TOKEN` by default. No release workflow writes metadata commits or requires a protected-branch bypass.
 - The source-controlled rules proposal is reviewable preparation; do not claim live rules are active without inspecting GitHub after an explicitly authorized activation.
-- The next release includes breaking runtime and metadata typing changes. Its promotion must retain a Conventional Commits `BREAKING CHANGE:` declaration; do not publish it as a patch.
-- Run `npm run format:check` and `npm run verify:package` in addition to the mandatory commands above. Registry verification and the first normal release remain separate remote acceptance evidence.
+- The next release includes breaking runtime and metadata typing changes. Its squash message must retain a Conventional Commits `BREAKING CHANGE:` declaration; do not publish it as a patch.
+- Run `npm run format:check` and `npm run test:package -- /absolute/path/package.tgz` in addition to the mandatory commands above. Registry verification and the first normal release remain separate remote acceptance evidence.
 - See `docs/release-train.md` and `docs/migration-v2.md` for activation, recovery, compatibility, and rollback boundaries.

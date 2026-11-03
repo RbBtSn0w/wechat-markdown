@@ -1,11 +1,38 @@
 {
   "branches": ["main"],
   "plugins": [
-    "@semantic-release/commit-analyzer",
-    "@semantic-release/release-notes-generator",
-    "@semantic-release/changelog",
-    ["@semantic-release/npm", { "npmPublish": false }],
-    "./scripts/release/plugin.cjs",
-    "@semantic-release/github"
+    "./scripts/commit-semantics.mjs",
+    [
+      "@semantic-release/commit-analyzer",
+      {
+        "preset": "conventionalcommits"
+      }
+    ],
+    [
+      "@semantic-release/release-notes-generator",
+      {
+        "preset": "conventionalcommits"
+      }
+    ],
+    "./scripts/release-payload.mjs",
+    [
+      "@semantic-release/github",
+      {
+        "assets": [
+          {
+            "path": "release-input/final.tgz",
+            "label": "Verified npm archive"
+          },
+          {
+            "path": "release-input/final.json",
+            "label": "Archive identity"
+          },
+          {
+            "path": "release-input/receipts/*.json",
+            "label": "Registry receipt"
+          }
+        ]
+      }
+    ]
   ]
 }

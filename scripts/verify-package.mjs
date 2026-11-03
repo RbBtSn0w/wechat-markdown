@@ -12,32 +12,29 @@ const run = (command, args, cwd = root) =>
   execFileSync(command, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
 
 try {
-  const [packed] = JSON.parse(
-    run(npm, ['pack', '--json', '--ignore-scripts', '--pack-destination', temporary]),
-  );
-  for (const { path: file } of packed.files) {
+  const tarball = process.argv[2];
+  assert(tarball && path.isAbsolute(tarball), 'Expected an absolute tarball input');
+  const files = run('tar', ['-tzf', tarball])
+    .trim()
+    .split('\n')
+    .map((file) => file.replace(/^package\//, ''))
+    .filter((file) => file && !file.endsWith('/'));
+  for (const file of files) {
     assert(
       /^dist\/.+\.(?:js|d\.ts|js\.map|d\.ts\.map)$/.test(file) ||
         ['package.json', 'README.md', 'LICENSE'].includes(file),
       `Unexpected package file: ${file}`,
     );
   }
-  assert(packed.files.some(({ path: file }) => file === 'dist/index.js'));
-  assert(packed.files.some(({ path: file }) => file === 'dist/index.d.ts'));
+  assert(files.includes('dist/index.js'));
+  assert(files.includes('dist/index.d.ts'));
   writeFileSync(
     path.join(temporary, 'package.json'),
     JSON.stringify({ name: 'wechat-markdown-consumer-check', private: true }),
   );
   run(
     npm,
-    [
-      'install',
-      path.join(temporary, packed.filename),
-      '--omit=dev',
-      '--ignore-scripts',
-      '--no-audit',
-      '--no-fund',
-    ],
+    ['install', tarball, '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund'],
     temporary,
   );
   writeFileSync(

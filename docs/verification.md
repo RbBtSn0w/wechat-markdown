@@ -1,8 +1,11 @@
 # Implementation and acceptance status
 
+> Historical validation record. The release-controller/sync/preview portions below
+> are superseded by `release-train.md`; they are not activation instructions.
+
 Local implementation verified on 2026-11-02. This record covers local validation;
 remote rules updates, credential configuration, and package publication remain
-outside that validation. The working version remains 1.7.0; the next promotion
+outside that validation. The working version remains 1.7.0; the next main integration
 requires a major release as described in the migration guide.
 
 ## Audit closure

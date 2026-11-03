@@ -30,7 +30,8 @@
     "format": "prettier --write .github/workflows/*.yml .releaserc.json package.json tsconfig*.json vitest.config.mts .eslintrc.js src/ test/ scripts/ docs/",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
     "format:check": "prettier --check .github/workflows/*.yml .releaserc.json package.json tsconfig*.json vitest.config.mts .eslintrc.js src/ test/ scripts/ docs/",
-    "verify:package": "npm run build && node scripts/verify-package.mjs"
+    "verify:package": "node scripts/verify-package.mjs",
+    "test:package": "node scripts/verify-package.mjs"
   },
   "keywords": [
     "markdown",
@@ -66,10 +67,7 @@
     "undici": "^7.30.1"
   },
   "devDependencies": {
-    "@semantic-release/changelog": "^6.0.3",
-    "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^12.0.0",
-    "@semantic-release/npm": "^13.1.5",
     "@types/node": "^22.0.0",
     "@types/sanitize-html": "^2.16.0",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
@@ -79,7 +77,14 @@
     "prettier": "^3.8.1",
     "semantic-release": "^25.0.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "@commitlint/lint": "21.2.4",
+    "@commitlint/config-conventional": "21.2.4",
+    "import-from-esm": "2.0.0",
+    "publint": "0.3.25",
+    "conventional-changelog-conventionalcommits": "9.3.0",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/release-notes-generator": "^14.1.1"
   },
   "type": "commonjs",
   "engines": {

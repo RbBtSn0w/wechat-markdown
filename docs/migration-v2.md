@@ -1,8 +1,8 @@
 # Next major release migration
 
 This change set requires a major release. The working package version is not
-manually advanced: semantic-release derives the next version from the promotion
-history. The promotion must preserve a `BREAKING CHANGE:` declaration for the
+manually advanced: semantic-release derives the next version from the accepted squash
+history. The squash message must preserve a `BREAKING CHANGE:` declaration for the
 runtime floor and metadata typing changes.
 
 ## Runtime
