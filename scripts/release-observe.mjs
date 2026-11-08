@@ -1,3 +1,4 @@
+import { sealedTagFormat } from '../.github/release-train/npm-channel.mjs';
 // Read-only GitHub preflight shared by recovery and recovery instructions.
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -25,7 +26,7 @@ export function observeRelease({
     plan: { ...metadata, notes },
     repository,
     read,
-    tagFormat: metadata.tag === metadata.version ? '${version}' : 'v${version}',
+    tagFormat: sealedTagFormat(metadata),
   });
   try {
     const expected =

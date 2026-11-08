@@ -13,6 +13,7 @@ function sealedFixture(tag = 'v2.0.0') {
   mkdirSync(join(cwd, 'bin'));
   const archive = Buffer.from('Synthetic original verified archive');
   const metadata = {
+    ...(tag === '2.0.0-2.0.0' ? { tag_format: '2.0.0-${version}' } : {}),
     candidate_sha: candidate,
     version: '2.0.0',
     tag,
@@ -67,8 +68,8 @@ test('sealed producer result retains original notes and both exact asset digests
     assert.equal(artifact.sha256, metadata.sha256);
   }
 });
-test('read-only preflight supports both plain and v-prefixed original npm tags with matching drafts', () => {
-  for (const tag of ['2.0.0', 'v2.0.0']) {
+test('read-only preflight supports plain, v-prefixed and custom original npm tags with matching drafts', () => {
+  for (const tag of ['2.0.0', 'v2.0.0', 'release-2.0.0', '2.0.0-2.0.0']) {
     const { cwd, metadata } = sealedFixture(tag),
       expected = Object.fromEntries(
         ['final.tgz', 'final.json'].map((name) => [
@@ -95,4 +96,20 @@ const path=process.argv[3];if(path.includes('/git/ref/tags/'))console.log(JSON.s
     assert.equal(observed.targets.github.status, 'unknown');
     assert.equal(observed.targets.stable_tag.candidate_sha, candidate);
   }
+});
+
+test('actual recovery preserves a custom original tag through preflight, reconciliation and producer reporting', async () => {
+  const { runRecovery } = await import('./helpers/release-recovery-fixture.mjs');
+  const { cwd, result, original } = runRecovery('missing-assets', 'release-2.0.0');
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(readFileSync(join(cwd, 'release-input/final.tgz')), original);
+  const report = spawnSync(process.execPath, [resolve('scripts/release-status.mjs'), 'recover'], {
+    cwd,
+    env: { ...process.env, RELEASE_ENABLED: 'true', GITHUB_STEP_SUMMARY: '' },
+    encoding: 'utf8',
+  });
+  assert.equal(report.status, 0, report.stderr);
+  const sealed = JSON.parse(readFileSync(join(cwd, 'release-result.json'))).artifacts[0];
+  assert.equal(sealed.tag, 'release-2.0.0');
+  assert.equal(sealed.tag_format, 'release-${version}');
 });

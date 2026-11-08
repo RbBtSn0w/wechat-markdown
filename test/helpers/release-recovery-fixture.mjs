@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-export function runRecovery(mode = 'missing-assets') {
+export function runRecovery(mode = 'missing-assets', tag = 'v2.0.0') {
   const cwd = mkdtempSync(join(tmpdir(), 'release-recovery-flow-'));
   const input = join(cwd, 'sealed');
   mkdirSync(input);
@@ -26,7 +26,8 @@ export function runRecovery(mode = 'missing-assets') {
   const metadata = {
     name: '@scope/public-fixture',
     version: '2.0.0',
-    tag: 'v2.0.0',
+    tag,
+    tag_format: tag === 'v2.0.0' ? 'v${version}' : 'release-${version}',
     candidate_sha: 'a'.repeat(40),
     repository: 'owner/repo',
     source_run_id: '12',
@@ -87,13 +88,13 @@ export function runRecovery(mode = 'missing-assets') {
     `#!/usr/bin/env node
 const fs=require('fs'),path=require('path'),crypto=require('crypto');const args=process.argv.slice(2),state=process.env.STATE,mode=process.env.REMOTE_MODE;
 const read=name=>fs.readFileSync(path.join(state,name));
-function release(){const mutated=fs.existsSync(path.join(state,'draft-published'));return {id:mode==='mutation-id'&&mutated?78:77,tag_name:'v2.0.0',body:(mode==='notes-conflict'||mode==='mutation-notes'&&mutated)?'Conflicting notes':'Original release notes',prerelease:mode==='mutation-channel'&&mutated,draft:!fs.existsSync(path.join(state,'draft-published')),assets:['final.tgz','final.json'].filter(name=>fs.existsSync(path.join(state,'uploaded-'+name))).map((name,index)=>({id:index+101,name,digest:'sha256:'+(mode==='asset-conflict'?'f'.repeat(64):crypto.createHash('sha256').update(read('uploaded-'+name)).digest('hex'))})),html_url:'https://github.com/owner/repo/releases/tag/v2.0.0'};}
+function release(){const mutated=fs.existsSync(path.join(state,'draft-published'));return {id:mode==='mutation-id'&&mutated?78:77,tag_name:'${metadata.tag}',body:(mode==='notes-conflict'||mode==='mutation-notes'&&mutated)?'Conflicting notes':'Original release notes',prerelease:mode==='mutation-channel'&&mutated,draft:!fs.existsSync(path.join(state,'draft-published')),assets:['final.tgz','final.json'].filter(name=>fs.existsSync(path.join(state,'uploaded-'+name))).map((name,index)=>({id:index+101,name,digest:'sha256:'+(mode==='asset-conflict'?'f'.repeat(64):crypto.createHash('sha256').update(read('uploaded-'+name)).digest('hex'))})),html_url:'https://github.com/owner/repo/releases/tag/${metadata.tag}'};}
 if(args[0]==='api') {
  const url=args[1];
  if(url.endsWith('/runs/12')){if(mode==='stale-source-read-error'){console.error('original run unavailable');process.exit(22);}process.stdout.write(read('run.json'));}
  else if(url.endsWith('/artifacts/34'))process.stdout.write(read('artifact.json'));
  else if(url.endsWith('/artifacts/34/zip'))process.stdout.write(read('original.zip'));
- else if(url.includes('/git/ref/tags/')){if(mode==='early-tag-read-error'&&!fs.existsSync(path.join(state,'tag-error-seen'))){fs.writeFileSync(path.join(state,'tag-error-seen'),'true');process.exit(22);}console.log(JSON.stringify({ref:'refs/tags/v2.0.0',object:{type:'commit',sha:'a'.repeat(40)}}));}
+ else if(url.includes('/git/ref/tags/')){if(mode==='early-tag-read-error'&&!fs.existsSync(path.join(state,'tag-error-seen'))){fs.writeFileSync(path.join(state,'tag-error-seen'),'true');process.exit(22);}console.log(JSON.stringify({ref:'refs/tags/${metadata.tag}',object:{type:'commit',sha:'a'.repeat(40)}}));}
  else if(url.endsWith('/releases')||url.includes('/releases?')||url.includes('/releases/tags/')){
   if(mode==='read-error'||mode==='stale-github-read-error'){console.error('readback unavailable');process.exit(22);}
   const absent=mode==='missing-release'&&!fs.existsSync(path.join(state,'release-created'));

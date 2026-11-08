@@ -145,6 +145,7 @@ if (dispatch) {
             ...source,
             source_attempt: sourceAttempt,
             tag: metadata.tag,
+            tag_format: metadata.tag_format ?? analysis.tag_format,
             repository: metadata.repository,
             sha256: metadata.sha256,
             notes: analysis.notes,
@@ -200,6 +201,7 @@ if (
         candidate_sha: result.candidate_sha,
         version: result.version,
         tag,
+        tag_format: sealed?.tag_format,
         repository,
         sha256: sealed?.sha256,
       };

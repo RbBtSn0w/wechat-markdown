@@ -1,4 +1,8 @@
-import { verifyLatest, assertNoKnownNewerLatest } from '../.github/release-train/npm-channel.mjs';
+import {
+  verifyLatest,
+  assertNoKnownNewerLatest,
+  sealedTagFormat,
+} from '../.github/release-train/npm-channel.mjs';
 import {
   recoveryTag,
   cleanRecoveryTag,
@@ -76,6 +80,7 @@ export async function prepare(_options, { cwd, env = process.env, nextRelease })
     analysis.notes !== nextRelease.notes
   )
     throw Error('Release notes changed after analysis; analyze and verify a fresh candidate');
+  const tagFormat = sealedTagFormat(analysis);
   const before = JSON.stringify(payload(root));
   const manifestPath = join(root, 'package.json');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
@@ -99,6 +104,7 @@ export async function prepare(_options, { cwd, env = process.env, nextRelease })
       source_attempt: env.GITHUB_RUN_ATTEMPT,
       operation: 'release',
       tag: nextRelease.gitTag,
+      tag_format: tagFormat,
       baseline_tag: analysis.baseline_tag || null,
     }),
   );

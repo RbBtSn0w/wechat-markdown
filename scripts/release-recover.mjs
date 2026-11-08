@@ -1,3 +1,4 @@
+import { sealedTagFormat } from '../.github/release-train/npm-channel.mjs';
 // Recovery uses current trusted workflow code and the original sealed publication bytes.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -13,6 +14,12 @@ import { observeRelease } from './release-observe.mjs';
 import { publish } from './release-payload.mjs';
 const sha256 = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
 export function validatePayload(metadata, analysis, archive) {
+  if (
+    sealedTagFormat({ ...metadata, tag_format: metadata.tag_format ?? analysis.tag_format }) !==
+    sealedTagFormat(analysis)
+  )
+    throw Error('Sealed tag format mismatch');
+  metadata.tag_format = sealedTagFormat(analysis);
   if (
     metadata.candidate_sha !== analysis.candidate_sha ||
     metadata.version !== analysis.version ||
