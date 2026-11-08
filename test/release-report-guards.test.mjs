@@ -12,6 +12,8 @@ const receipt = {
   version: '2.0.0',
   observed_at: '2026-11-08T00:00:00Z',
   remote_id: 'example@2.0.0',
+  latest_version: '2.0.0',
+  channel_observed_at: '2026-11-08T00:00:00Z',
   sha256: 'b'.repeat(64),
 };
 function report(source, extra = {}) {
@@ -19,6 +21,13 @@ function report(source, extra = {}) {
   mkdirSync(join(cwd, 'release-observations'));
   mkdirSync(join(cwd, 'bin'));
   writeFileSync(join(cwd, 'release-observations/release-result.json'), JSON.stringify(source));
+  if (extra.MALFORMED_OBSERVATION) {
+    mkdirSync(join(cwd, 'release-observations/malformed'));
+    writeFileSync(
+      join(cwd, 'release-observations/malformed/release-result.json'),
+      extra.MALFORMED_OBSERVATION,
+    );
+  }
   const originalRun = {
     id: 12,
     repository: { full_name: 'owner/repo' },
@@ -168,4 +177,93 @@ test('failure Summary never offers recovery for conflicting remote notes/assets 
     );
     assert.doesNotMatch(value.summary, /gh workflow run/, mode);
   }
+});
+
+test('malformed producer input preserves valid evidence and writes a failed durable outcome', () => {
+  const original = {
+    artifact_id: '34',
+    source_run_id: '12',
+    source_attempt: '1',
+    tag: 'v2.0.0',
+    repository: 'owner/repo',
+    sha256: 'b'.repeat(64),
+    notes: 'Original release notes',
+    expected_assets: {
+      'final.tgz': 'sha256:' + 'b'.repeat(64),
+      'final.json': 'sha256:' + 'd'.repeat(64),
+    },
+  };
+  for (const malformed of ['{invalid', 'null', '[]', '42', '{"targets":"invalid"}']) {
+    const value = report(
+      { ...base, targets: { npm: receipt }, artifacts: [original] },
+      { MALFORMED_OBSERVATION: malformed },
+    );
+    assert.equal(value.run.status, 1);
+    assert.equal(value.result.failure_stage, 'report-inputs');
+    assert.equal(value.result.targets.npm.status, 'completed');
+    assert.ok(value.result.errors.some((error) => error.message.includes('producer')));
+    assert.match(value.summary, /report-inputs/);
+  }
+});
+test('aggregate registry evidence is bound to the selected sealed checksum and verified channel', () => {
+  const original = {
+    artifact_id: '34',
+    source_run_id: '12',
+    source_attempt: '1',
+    tag: 'v2.0.0',
+    repository: 'owner/repo',
+    sha256: 'b'.repeat(64),
+    notes: 'Original release notes',
+    expected_assets: {
+      'final.tgz': 'sha256:' + 'b'.repeat(64),
+      'final.json': 'sha256:' + 'd'.repeat(64),
+    },
+  };
+  for (const bad of [
+    { sha256: 'f'.repeat(64) },
+    { latest_version: '1.0.0' },
+    { channel_observed_at: undefined },
+  ]) {
+    const value = report({
+      ...base,
+      targets: { npm: { ...receipt, ...bad } },
+      artifacts: [original],
+    });
+    assert.notEqual(value.result.targets.npm.status, 'completed');
+  }
+});
+
+test('retained completed receipt with matching bytes but unconfirmed latest blocks unsupported recovery instructions', () => {
+  const original = {
+    artifact_id: '34',
+    source_run_id: '12',
+    source_attempt: '1',
+    tag: 'v2.0.0',
+    repository: 'owner/repo',
+    sha256: 'b'.repeat(64),
+    notes: 'Original release notes',
+    expected_assets: {
+      'final.tgz': 'sha256:' + 'b'.repeat(64),
+      'final.json': 'sha256:' + 'd'.repeat(64),
+    },
+  };
+  for (const latest_version of ['1.0.0', undefined]) {
+    const value = report({
+      ...base,
+      targets: { npm: { ...receipt, latest_version } },
+      artifacts: [original],
+    });
+    assert.equal(value.result.targets.npm.status, 'unknown');
+    assert.equal(value.result.targets.npm.bytes_verified, true);
+    assert.equal(value.result.targets.npm.channel_blocked, true);
+    assert.equal(value.result.recovery.available, false);
+    assert.doesNotMatch(value.summary, /gh workflow run/);
+  }
+  const wrong = report({
+    ...base,
+    targets: { npm: { ...receipt, latest_version: '1.0.0', sha256: 'f'.repeat(64) } },
+    artifacts: [original],
+  });
+  assert.notEqual(wrong.result.targets.npm.bytes_verified, true);
+  assert.notEqual(wrong.result.targets.npm.channel_blocked, true);
 });

@@ -148,3 +148,8 @@ test('artifact restore rejects wrong candidate and changed bytes', () => {
     assert.equal(result.status === 0, mode === 'valid');
   }
 });
+
+test('publication authority is explicitly passed into the writer process environment', () => {
+  assert.equal(step('release', 'publish').env.RELEASE_ENABLED, '${{ vars.RELEASE_ENABLED }}');
+  assert.equal(step('recover', 'publish').env.RELEASE_ENABLED, '${{ vars.RELEASE_ENABLED }}');
+});

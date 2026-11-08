@@ -1,6 +1,7 @@
 // Product-specific observations. Only channel readback can confirm publication.
 import { createHash } from 'node:crypto';
 import { readFileSync, existsSync } from 'node:fs';
+import { receiptObservation } from './release-receipt.mjs';
 import { writeResult } from '../.github/release-train/release-result.mjs';
 const read = (file) => (existsSync(file) ? JSON.parse(readFileSync(file)) : null);
 const analysis =
@@ -34,20 +35,24 @@ const version = metadata.version || analysis.version || null;
 const targets = {};
 for (const target of intended) {
   const receipt = read(`release-input/receipts/${target}.json`);
-  const digest = target === 'homebrew' ? receipt?.sha256 : metadata.sha256;
-  const confirmed =
-    receipt?.status === 'completed' &&
-    receipt.candidate_sha === candidate &&
-    receipt.version === version &&
-    Number.isFinite(Date.parse(receipt.observed_at)) &&
-    (receipt.remote_id || receipt.url) &&
-    /^[a-f0-9]{64}$/.test(receipt.sha256 || '') &&
-    receipt.sha256 === digest &&
-    (target !== 'homebrew' || receipt.source_sha256 === metadata.sha256);
-  targets[target] = confirmed ? receipt : { status: receipt ? 'unknown' : 'not-run' };
+  targets[target] = receiptObservation(
+    receipt,
+    { candidate_sha: candidate, version, sha256: metadata.sha256 },
+    target,
+  );
 }
 const failed = verification === 'failed' || process.env.PUBLISH_OUTCOME === 'failure';
-const recovery = read('release-input/recovery.json');
+const recovery =
+  read('release-input/recovery.json') ||
+  (operation === 'recover' && (process.env.SOURCE_RUN_ID || process.env.ARTIFACT_ID)
+    ? {
+        source_run_id: process.env.SOURCE_RUN_ID || null,
+        artifact_id: process.env.ARTIFACT_ID || null,
+        available: false,
+        identity_verified: false,
+        blocked_reason: 'Original dispatch identities have not been verified',
+      }
+    : null);
 const sealed =
   (process.env.SEALED_ARTIFACT_ID || recovery?.artifact_id) && metadata.sha256
     ? {
@@ -85,7 +90,7 @@ writeResult(
     targets,
     artifacts: sealed ? [sealed] : [],
     failure_stage: failed ? operation : null,
-    recovery: read('release-input/recovery.json'),
+    recovery,
     errors: failed
       ? [
           {

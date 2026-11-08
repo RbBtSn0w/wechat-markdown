@@ -11,6 +11,7 @@ export function releaseEnv(cwd) {
   );
   return {
     ...process.env,
+    RELEASE_ENABLED: 'true',
     PATH: `${bin}:${process.env.PATH}`,
     CANDIDATE_SHA: 'a'.repeat(40),
     GITHUB_REPOSITORY: 'owner/fixture',

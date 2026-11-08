@@ -20,6 +20,7 @@ test('post-publish visibility delays retry reads without repeating publication',
     join(bin, 'npm'),
     `#!/usr/bin/env node
 const fs=require('node:fs'),path=require('node:path');const args=process.argv.slice(2);const target=args.at(-1).includes('github')?'github':'npm';const marker=path.join(process.env.STATE,target);const metadata=JSON.parse(fs.readFileSync(path.join(process.env.STATE,'release-input/final.json')));
+if(args[0]==='view'&&args[2]==='dist-tags'){console.log(JSON.stringify({latest:metadata.version}));process.exit(0);}
 if(args[0]==='publish'){if(fs.existsSync(marker))process.exit(99);fs.writeFileSync(marker,args[1]);process.exit(0);}
 const countFile=marker+'.reads';const count=fs.existsSync(countFile)?Number(fs.readFileSync(countFile)):0;fs.writeFileSync(countFile,String(count+1));
 if(count<2){console.log(JSON.stringify({error:{code:'E404'}}));process.exit(1);}console.log(JSON.stringify(metadata.integrity));

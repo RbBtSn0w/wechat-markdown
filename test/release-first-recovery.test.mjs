@@ -39,6 +39,8 @@ test('first failed publication surfaces original immutable recovery identity; la
             version: '2.0.0',
             observed_at: '2026-11-08T00:00:00Z',
             remote_id: 'example@2.0.0',
+            latest_version: '2.0.0',
+            channel_observed_at: '2026-11-08T00:00:00Z',
             sha256: 'b'.repeat(64),
           },
         },

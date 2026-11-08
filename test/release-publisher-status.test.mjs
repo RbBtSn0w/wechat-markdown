@@ -55,7 +55,7 @@ test('normal publisher readback receipts are confirmed by the actual status adap
   writeFileSync(
     join(bin, 'npm'),
     `#!/usr/bin/env node
-const fs=require('fs'),path=require('path');if(process.argv[2]!=='view')process.exit(99);console.log(JSON.stringify(JSON.parse(fs.readFileSync(path.join(process.env.STATE,'release-input/final.json'))).integrity));
+const fs=require('fs'),path=require('path');if(process.argv[2]!=='view')process.exit(99);const metadata=JSON.parse(fs.readFileSync(path.join(process.env.STATE,'release-input/final.json')));console.log(JSON.stringify(process.argv[4]==='dist-tags'?{latest:metadata.version}:metadata.integrity));
 `,
     { mode: 0o755 },
   );
