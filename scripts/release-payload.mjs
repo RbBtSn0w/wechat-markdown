@@ -132,6 +132,7 @@ export async function publish(_options, { cwd, env, nextRelease }) {
   }
   const receipts = join(input, 'receipts');
   mkdirSync(receipts, { recursive: true });
+  const deferredErrors = [];
   for (const [target, registry] of [
     ['npm', 'https://registry.npmjs.org'],
     ['github-packages', 'https://npm.pkg.github.com'],
@@ -239,7 +240,10 @@ export async function publish(_options, { cwd, env, nextRelease }) {
           reason: `Latest channel is not confirmed: ${error.message}`,
         }),
       );
-      throw error;
+      // Original-byte recovery can continue safe targets; normal publication remains fail-fast.
+      if (!(_options.recovery && _options.deferChannelErrors)) throw error;
+      deferredErrors.push(new Error(`${target}: ${error.message}`, { cause: error }));
+      continue;
     }
     writeFileSync(
       join(receipts, `${target}.json`),
@@ -260,9 +264,13 @@ export async function publish(_options, { cwd, env, nextRelease }) {
       }),
     );
   }
-  writeFileSync(join(input, 'released-version'), `${nextRelease.version}\n`);
+  if (!deferredErrors.length)
+    writeFileSync(join(input, 'released-version'), `${nextRelease.version}\n`);
   return {
     name: 'npm and GitHub Packages',
     url: `https://www.npmjs.com/package/${metadata.name}/v/${metadata.version}`,
+    ...(_options.recovery && _options.deferChannelErrors
+      ? { deferred_errors: deferredErrors }
+      : {}),
   };
 }

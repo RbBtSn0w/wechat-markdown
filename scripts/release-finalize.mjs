@@ -22,6 +22,9 @@ function observations(root) {
         !object(source) ||
         !/^[a-f0-9]{40}$/.test(source.candidate_sha || '') ||
         !['passed', 'failed', 'not-run'].includes(source.verification) ||
+        (source.observed_at !== undefined &&
+          (typeof source.observed_at !== 'string' ||
+            !Number.isFinite(Date.parse(source.observed_at)))) ||
         !object(source.targets) ||
         Object.values(source.targets).some(
           (target) => !object(target) || !states.has(target.status),

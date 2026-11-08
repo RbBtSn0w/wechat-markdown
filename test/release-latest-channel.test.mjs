@@ -67,3 +67,10 @@ test('direct product publication requires the explicit publication switch before
   assert.equal(existsSync(join(cwd, 'release-input/receipts')), false);
   assert.equal(existsSync(join(cwd, 'unexpected-write')), false);
 });
+
+test('channel deferral cannot turn ordinary publication into a successful partial release', async () => {
+  const { cwd, context } = await fixture('stale');
+  await assert.rejects(publish({ deferChannelErrors: true }, context), /latest|channel/i);
+  assert.equal(existsSync(join(cwd, 'release-input/receipts/github-packages.json')), false);
+  assert.equal(existsSync(join(cwd, 'release-input/released-version')), false);
+});

@@ -67,6 +67,7 @@ function findRelease(repository, tag) {
   return matches[0] || null;
 }
 export function reconcileGitHub(metadata, notes, input = 'release-input') {
+  rmSync(join(input, 'receipts/github-release.json'), { force: true });
   validateTag(metadata);
   const observation = observeRelease({ metadata, notes, input });
   if (observation.recovery.state !== 'repairable')
@@ -277,6 +278,7 @@ export function inspectRecovery({
 }
 export async function recover() {
   if (process.env.RELEASE_ENABLED !== 'true') throw Error('Publication remains disabled');
+  rmSync(join('release-input', 'receipts/github-release.json'), { force: true });
   const original = inspectRecovery();
   const { source, sourceAttempt, artifact, metadata, analysis, files, publicationObservation } =
     original;
@@ -299,14 +301,25 @@ export async function recover() {
     }),
   );
   process.env.CANDIDATE_SHA = metadata.candidate_sha;
-  await publish(
-    { recovery: true },
+  const publication = await publish(
+    { recovery: true, deferChannelErrors: true },
     { cwd: process.cwd(), env: process.env, nextRelease: { version: metadata.version } },
   );
-  reconcileGitHub(metadata, analysis.notes);
+  const errors = [...(publication.deferred_errors || [])];
+  try {
+    reconcileGitHub(metadata, analysis.notes);
+  } catch (error) {
+    errors.push(error);
+  }
+  if (errors.length)
+    throw new AggregateError(
+      errors,
+      'Original recovery remains incomplete; inspect target receipts',
+    );
 }
 if (
   process.argv[1] &&
+  process.argv[1] !== '-' &&
   realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url))
 )
   await recover();
