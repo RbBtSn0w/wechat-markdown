@@ -23,8 +23,8 @@ Welcome, Agent. This document defines the authoritative, non-negotiable operatin
 
 `main` is the only integration trunk. Branch from current `origin/main` and submit
 reviewed squash PRs to `main`. Preserve Conventional Commit title/body and breaking
-change declarations. CI and PRs never publish; the default-off scheduled/manual
-workflow owns stable npmjs + GitHub Packages. See `docs/release-train.md` for
+change declarations. CI and PRs never publish; the scheduled/manual
+workflow (publication remains default-off; analysis/verification always run) owns stable npmjs + GitHub Packages. See `docs/release-train.md` for
 artifact boundaries, activation blockers and partial-publication recovery.
 
 ---

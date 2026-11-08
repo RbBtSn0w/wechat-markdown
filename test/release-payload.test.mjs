@@ -1,3 +1,4 @@
+import { releaseEnv } from './helpers/release-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { prepare, publish } from '../scripts/release-payload.mjs';
@@ -20,7 +21,7 @@ test('prepare injects only manifest version and preserves packed executable byte
   );
   mkdirSync(join(pkg, 'dist'));
   writeFileSync(join(pkg, 'dist/cli.js'), 'console.log("packed");');
-  await prepare({}, { cwd, nextRelease: { version: '2.0.0' } });
+  await prepare({}, { cwd, env: releaseEnv(cwd), nextRelease: { version: '2.0.0' } });
   assert.equal(readFileSync(join(pkg, 'dist/cli.js'), 'utf8'), 'console.log("packed");');
   const manifest = JSON.parse(
     execFileSync('tar', ['-xOf', join(cwd, 'release-input/final.tgz'), 'package/package.json'], {
@@ -41,7 +42,7 @@ test('registry identities are verified, missing targets receive the identical ar
       join(root, 'package.json'),
       JSON.stringify({ name: '@scope/fixture', version: '1.0.0' }),
     );
-    await prepare({}, { cwd, nextRelease: { version: '1.1.0' } });
+    await prepare({}, { cwd, env: releaseEnv(cwd), nextRelease: { version: '1.1.0' } });
     const bin = join(cwd, 'bin');
     mkdirSync(bin);
     writeFileSync(
@@ -56,8 +57,8 @@ else {if(process.env.MODE==='mirror-failed'&&target==='github'){console.error('m
     const context = {
       cwd,
       env: {
-        ...process.env,
-        PATH: bin + ':' + process.env.PATH,
+        ...releaseEnv(cwd),
+        PATH: bin + ':' + releaseEnv(cwd).PATH,
         STATE: cwd,
         MODE: mode,
         CANDIDATE_SHA: 'a'.repeat(40),

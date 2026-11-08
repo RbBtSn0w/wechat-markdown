@@ -1,7 +1,12 @@
+import {
+  recoveryTag,
+  cleanRecoveryTag,
+  reconcileLatest,
+} from '../.github/release-train/npm-recovery-tag.mjs';
 // Stateless semantic-release payload hooks. Version selection belongs to the engine.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 function digest(path) {
@@ -20,12 +25,43 @@ function payload(root, prefix = '') {
           : [[file, digest(path)]];
     });
 }
-export async function prepare(_options, { cwd, nextRelease }) {
+function assertLiveMain(cwd, env) {
+  const candidate = env.CANDIDATE_SHA;
+  if (
+    !/^[a-f0-9]{40}$/.test(candidate || '') ||
+    !/^[^/]+\/[^/]+$/.test(env.GITHUB_REPOSITORY || '')
+  )
+    throw Error('Main guard requires candidate and repository');
+  const head = execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd,
+    env,
+    encoding: 'utf8',
+    timeout: 10000,
+  }).trim();
+  const live = execFileSync(
+    'gh',
+    ['api', `repos/${env.GITHUB_REPOSITORY}/git/ref/heads/main`, '--jq', '.object.sha'],
+    { cwd, env, encoding: 'utf8', timeout: 10000 },
+  ).trim();
+  if (head !== candidate || live !== candidate)
+    throw Error('Main changed or could not be read; verify a fresh candidate.');
+}
+export async function prepare(_options, { cwd, env = process.env, nextRelease }) {
   const input = join(cwd, 'release-input'),
     root = join(input, 'unpacked/package');
   const before = JSON.stringify(payload(root));
   const manifestPath = join(root, 'package.json');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  const selected = join(input, 'analysis.json');
+  if (existsSync(selected)) {
+    const analysis = JSON.parse(readFileSync(selected));
+    if (
+      analysis.candidate_sha !== env.CANDIDATE_SHA ||
+      analysis.version !== nextRelease.version ||
+      analysis.tag !== nextRelease.gitTag
+    )
+      throw Error('Engine release differs from verified analysis');
+  }
   manifest.version = nextRelease.version;
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   // Re-archive existing files directly: no npm pack, file filtering, or lifecycle hooks.
@@ -37,11 +73,24 @@ export async function prepare(_options, { cwd, nextRelease }) {
       name: manifest.name,
       version: nextRelease.version,
       integrity: `sha512-${digest(join(input, 'final.tgz'))}`,
+      sha256: createHash('sha256')
+        .update(readFileSync(join(input, 'final.tgz')))
+        .digest('hex'),
+      candidate_sha: env.CANDIDATE_SHA,
+      repository: env.GITHUB_REPOSITORY,
+      source_run_id: env.GITHUB_RUN_ID,
+      operation: 'release',
+      tag: nextRelease.gitTag,
+      baseline_tag: existsSync(join(input, 'analysis.json'))
+        ? JSON.parse(readFileSync(join(input, 'analysis.json'))).baseline_tag
+        : null,
     }),
   );
+  assertLiveMain(cwd, env);
 }
 
 export async function publish(_options, { cwd, env, nextRelease }) {
+  if (!_options.recovery) assertLiveMain(cwd, env);
   const input = join(cwd, 'release-input'),
     archive = join(input, 'final.tgz');
   const metadata = JSON.parse(readFileSync(join(input, 'final.json'), 'utf8'));
@@ -63,6 +112,8 @@ export async function publish(_options, { cwd, env, nextRelease }) {
       target === 'github-packages' ? '//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}\n' : '',
     );
     const runEnv = { ...env, NPM_CONFIG_IGNORE_SCRIPTS: 'true', NPM_CONFIG_USERCONFIG: npmrc };
+    const tagOptions = { cwd: input, env: runEnv, registry };
+    const distributionTag = _options.recovery ? recoveryTag(metadata, tagOptions) : 'latest';
     const args = [
       'view',
       `${metadata.name}@${metadata.version}`,
@@ -98,7 +149,7 @@ export async function publish(_options, { cwd, env, nextRelease }) {
           '--access',
           'public',
           '--tag',
-          'latest',
+          distributionTag,
           '--registry',
           registry,
           ...(target === 'npm' ? ['--provenance'] : []),
@@ -127,6 +178,10 @@ export async function publish(_options, { cwd, env, nextRelease }) {
         if (attempt < 2) await new Promise((done) => setTimeout(done, 1000 * (attempt + 1)));
       }
       if (!verified) throw Error(`${target}: published integrity could not be verified: ${detail}`);
+    }
+    if (_options.recovery) {
+      reconcileLatest(metadata, tagOptions);
+      cleanRecoveryTag(metadata, distributionTag, tagOptions);
     }
     writeFileSync(
       join(receipts, `${target}.json`),
