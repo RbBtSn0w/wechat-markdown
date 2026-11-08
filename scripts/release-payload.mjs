@@ -1,4 +1,4 @@
-import { verifyLatest } from '../.github/release-train/npm-channel.mjs';
+import { verifyLatest, assertNoKnownNewerLatest } from '../.github/release-train/npm-channel.mjs';
 import {
   recoveryTag,
   cleanRecoveryTag,
@@ -174,6 +174,8 @@ export async function publish(_options, { cwd, env, nextRelease }) {
         /* fail closed below */
       }
       if (error?.code !== 'E404') throw Error(`${target}: registry lookup failed: ${view.stderr}`);
+      // Reject known channel regression; this read is not a compare-and-swap.
+      if (!_options.recovery) assertNoKnownNewerLatest(metadata, tagOptions);
       execFileSync(
         'npm',
         [

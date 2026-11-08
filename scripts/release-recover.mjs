@@ -278,7 +278,7 @@ export function inspectRecovery({
 }
 export async function recover() {
   if (process.env.RELEASE_ENABLED !== 'true') throw Error('Publication remains disabled');
-  rmSync(join('release-input', 'receipts/github-release.json'), { force: true });
+  rmSync(join('release-input', 'receipts'), { recursive: true, force: true });
   const original = inspectRecovery();
   const { source, sourceAttempt, artifact, metadata, analysis, files, publicationObservation } =
     original;

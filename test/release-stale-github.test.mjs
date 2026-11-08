@@ -45,3 +45,29 @@ test('early failed recovery also invalidates stale GitHub completion before its 
     'completed',
   );
 });
+
+test('failed original-source or GitHub preflight invalidates all current target receipts without deleting original artifacts', () => {
+  for (const mode of ['stale-source-read-error', 'stale-github-read-error']) {
+    const { cwd, result, original } = runRecovery(mode);
+    assert.notEqual(result.status, 0, mode);
+    const status = spawnSync(process.execPath, [resolve('scripts/release-status.mjs'), 'recover'], {
+      cwd,
+      env: {
+        ...process.env,
+        RELEASE_ENABLED: 'true',
+        PUBLISH_OUTCOME: 'failure',
+        GITHUB_SHA: 'b'.repeat(40),
+        GITHUB_STEP_SUMMARY: '',
+      },
+      encoding: 'utf8',
+    });
+    assert.equal(status.status, 0, status.stderr);
+    const observed = JSON.parse(readFileSync(join(cwd, 'release-result.json')));
+    for (const target of ['npm', 'github-packages', 'github-release'])
+      assert.notEqual(observed.targets[target].status, 'completed', `${mode}: ${target}`);
+    assert.equal(existsSync(join(cwd, 'release-input/receipts/future-target.json')), false);
+    assert.equal(existsSync(join(cwd, 'original.zip')), true);
+    assert.deepEqual(readFileSync(join(cwd, 'sealed/final.tgz')), original);
+    assert.deepEqual(readFileSync(join(cwd, 'release-input/final.tgz')), original);
+  }
+});

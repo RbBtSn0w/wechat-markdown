@@ -90,7 +90,7 @@ const read=name=>fs.readFileSync(path.join(state,name));
 function release(){const mutated=fs.existsSync(path.join(state,'draft-published'));return {id:mode==='mutation-id'&&mutated?78:77,tag_name:'v2.0.0',body:(mode==='notes-conflict'||mode==='mutation-notes'&&mutated)?'Conflicting notes':'Original release notes',prerelease:mode==='mutation-channel'&&mutated,draft:!fs.existsSync(path.join(state,'draft-published')),assets:['final.tgz','final.json'].filter(name=>fs.existsSync(path.join(state,'uploaded-'+name))).map((name,index)=>({id:index+101,name,digest:'sha256:'+(mode==='asset-conflict'?'f'.repeat(64):crypto.createHash('sha256').update(read('uploaded-'+name)).digest('hex'))})),html_url:'https://github.com/owner/repo/releases/tag/v2.0.0'};}
 if(args[0]==='api') {
  const url=args[1];
- if(url.endsWith('/runs/12'))process.stdout.write(read('run.json'));
+ if(url.endsWith('/runs/12')){if(mode==='stale-source-read-error'){console.error('original run unavailable');process.exit(22);}process.stdout.write(read('run.json'));}
  else if(url.endsWith('/artifacts/34'))process.stdout.write(read('artifact.json'));
  else if(url.endsWith('/artifacts/34/zip'))process.stdout.write(read('original.zip'));
  else if(url.includes('/git/ref/tags/')){if(mode==='early-tag-read-error'&&!fs.existsSync(path.join(state,'tag-error-seen'))){fs.writeFileSync(path.join(state,'tag-error-seen'),'true');process.exit(22);}console.log(JSON.stringify({ref:'refs/tags/v2.0.0',object:{type:'commit',sha:'a'.repeat(40)}}));}
@@ -126,7 +126,7 @@ else process.exit(98);
   );
   for (const command of ['git', 'npx'])
     writeFileSync(join(cwd, 'bin', command), '#!/bin/sh\nexit 99\n', { mode: 0o755 });
-  if (mode === 'stale-github-read-error') {
+  if (mode === 'stale-github-read-error' || mode === 'stale-source-read-error') {
     mkdirSync(join(cwd, 'release-input/receipts'), { recursive: true });
     for (const name of ['final.tgz', 'final.json', 'analysis.json'])
       writeFileSync(join(cwd, 'release-input', name), readFileSync(join(input, name)));
@@ -145,6 +145,21 @@ else process.exit(98);
         remote_id: '77',
       }),
     );
+  }
+  if (mode === 'stale-github-read-error' || mode === 'stale-source-read-error') {
+    for (const target of ['npm', 'github-packages'])
+      writeFileSync(
+        join(cwd, `release-input/receipts/${target}.json`),
+        JSON.stringify({
+          ...metadata,
+          status: 'completed',
+          observed_at: '2026-11-08T00:00:00Z',
+          latest_version: '9.0.0',
+          channel_observed_at: '2026-11-08T00:00:00Z',
+          remote_id: metadata.name + '@' + metadata.version,
+        }),
+      );
+    writeFileSync(join(cwd, 'release-input/receipts/future-target.json'), '{"status":"completed"}');
   }
   const result = spawnSync(process.execPath, [resolve('scripts/release-recover.mjs')], {
     cwd,
