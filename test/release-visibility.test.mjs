@@ -1,4 +1,4 @@
-import { releaseEnv } from './helpers/release-env.mjs';
+import { releaseEnv, releaseDecision } from './helpers/release-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
@@ -13,7 +13,7 @@ test('post-publish visibility delays retry reads without repeating publication',
     join(root, 'package.json'),
     JSON.stringify({ name: '@scope/fixture', version: '1.0.0' }),
   );
-  await prepare({}, { cwd, env: releaseEnv(cwd), nextRelease: { version: '1.1.0' } });
+  await prepare({}, { cwd, env: releaseEnv(cwd), nextRelease: releaseDecision(cwd, '1.1.0') });
   const bin = join(cwd, 'bin');
   mkdirSync(bin);
   writeFileSync(
@@ -36,7 +36,7 @@ if(count<2){console.log(JSON.stringify({error:{code:'E404'}}));process.exit(1);}
         STATE: cwd,
         CANDIDATE_SHA: 'a'.repeat(40),
       },
-      nextRelease: { version: '1.1.0' },
+      nextRelease: releaseDecision(cwd, '1.1.0'),
     },
   );
   for (const target of ['npm', 'github'])

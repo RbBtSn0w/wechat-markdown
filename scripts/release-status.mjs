@@ -1,4 +1,5 @@
 // Product-specific observations. Only channel readback can confirm publication.
+import { createHash } from 'node:crypto';
 import { readFileSync, existsSync } from 'node:fs';
 import { writeResult } from '../.github/release-train/release-result.mjs';
 const read = (file) => (existsSync(file) ? JSON.parse(readFileSync(file)) : null);
@@ -46,16 +47,27 @@ for (const target of intended) {
   targets[target] = confirmed ? receipt : { status: receipt ? 'unknown' : 'not-run' };
 }
 const failed = verification === 'failed' || process.env.PUBLISH_OUTCOME === 'failure';
+const recovery = read('release-input/recovery.json');
 const sealed =
-  process.env.SEALED_ARTIFACT_ID && metadata.sha256
+  (process.env.SEALED_ARTIFACT_ID || recovery?.artifact_id) && metadata.sha256
     ? {
-        artifact_id: process.env.SEALED_ARTIFACT_ID,
+        artifact_id: process.env.SEALED_ARTIFACT_ID || recovery?.artifact_id,
         source_run_id: metadata.source_run_id,
         source_attempt: metadata.source_attempt || process.env.GITHUB_RUN_ATTEMPT,
         candidate_sha: candidate,
         tag: metadata.tag,
         repository: metadata.repository,
         sha256: metadata.sha256,
+        notes: analysis.notes,
+        expected_assets: Object.fromEntries(
+          ['final.tgz', 'final.json'].map((name) => [
+            name,
+            'sha256:' +
+              createHash('sha256')
+                .update(readFileSync(`release-input/${name}`))
+                .digest('hex'),
+          ]),
+        ),
       }
     : null;
 writeResult(

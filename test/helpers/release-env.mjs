@@ -16,3 +16,18 @@ export function releaseEnv(cwd) {
     GITHUB_REPOSITORY: 'owner/fixture',
   };
 }
+
+export function releaseDecision(cwd, version) {
+  const nextRelease = { version, gitTag: `v${version}`, notes: 'Original fixture notes' };
+  writeFileSync(
+    join(cwd, 'release-input/analysis.json'),
+    JSON.stringify({
+      candidate_sha: 'a'.repeat(40),
+      version,
+      tag: nextRelease.gitTag,
+      notes: nextRelease.notes,
+      baseline_tag: 'v1.0.0',
+    }),
+  );
+  return nextRelease;
+}

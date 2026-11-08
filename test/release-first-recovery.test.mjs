@@ -17,6 +17,11 @@ test('first failed publication surfaces original immutable recovery identity; la
       tag: 'v2.0.0',
       repository: 'owner/repo',
       sha256: 'b'.repeat(64),
+      notes: 'Original release notes',
+      expected_assets: {
+        'final.tgz': 'sha256:' + 'b'.repeat(64),
+        'final.json': 'sha256:' + 'd'.repeat(64),
+      },
     };
     writeFileSync(
       join(cwd, 'release-observations/release-result.json'),
@@ -47,7 +52,9 @@ test('first failed publication surfaces original immutable recovery identity; la
 const path=process.argv[3];
 if(path==='repos/owner/repo/actions/artifacts/34')console.log(JSON.stringify({id:34,name:'release-receipts-${candidate}-1',expired:false,digest:'sha256:'+'c'.repeat(64),expires_at:'2099-01-01T00:00:00Z',workflow_run:{id:12,head_sha:'${candidate}'}}));
 else if(path==='repos/owner/repo/actions/runs/12')console.log(JSON.stringify({id:12,repository:{full_name:'owner/repo'},path:'.github/workflows/release.yml',head_branch:'main',head_sha:'${candidate}',event:'schedule',status:'${recovery ? 'completed' : 'in_progress'}',run_attempt:2}));
-else if(path==='repos/owner/repo/git/ref/tags/v2.0.0')console.log(JSON.stringify({object:{type:'commit',sha:'${candidate}'}}));
+else if(path.startsWith('repos/owner/repo/releases?'))console.log('[]');
+else if(path==='repos/owner/repo/releases')console.log('[[]]');
+else if(path==='repos/owner/repo/git/ref/tags/v2.0.0')console.log(JSON.stringify({ref:'refs/tags/v2.0.0',object:{type:'commit',sha:'${candidate}'}}));
 else process.exit(99);
 `,
       { mode: 0o755 },

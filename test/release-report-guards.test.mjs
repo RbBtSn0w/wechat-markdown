@@ -42,7 +42,7 @@ function report(source, extra = {}) {
   writeFileSync(
     join(cwd, 'bin/gh'),
     `#!/usr/bin/env node
-const endpoint=process.argv[3];if(endpoint.endsWith('/artifacts/34'))console.log(${JSON.stringify(JSON.stringify(artifact))});else if(endpoint.endsWith('/runs/12'))console.log(${JSON.stringify(JSON.stringify(originalRun))});else if(endpoint.includes('/git/ref/tags/'))console.log(JSON.stringify({object:{type:'commit',sha:'${candidate}'}}));else process.exit(99);
+const endpoint=process.argv[3];if(endpoint.endsWith('/artifacts/34'))console.log(${JSON.stringify(JSON.stringify(artifact))});else if(endpoint.endsWith('/runs/12'))console.log(${JSON.stringify(JSON.stringify(originalRun))});else if(endpoint.includes('/git/ref/tags/'))console.log(JSON.stringify({ref:'refs/tags/v2.0.0',object:{type:'commit',sha:'${candidate}'}}));else if(endpoint.endsWith('/releases')||endpoint.includes('/releases/tags/')){const mode=${JSON.stringify(extra.REMOTE_MODE || 'missing-release')};if(mode==='read-error')process.exit(22);const release={id:77,tag_name:'v2.0.0',body:mode==='notes-conflict'?'Conflict':'Original release notes',draft:false,prerelease:false,assets:mode==='asset-conflict'?[{id:101,name:'final.tgz',digest:'sha256:'+'f'.repeat(64)}]:[]};console.log(JSON.stringify(endpoint.endsWith('/releases')?(mode==='missing-release'?[[]]:[[release]]):release));}else process.exit(99);
 `,
     { mode: 0o755 },
   );
@@ -120,6 +120,11 @@ test('recovery instructions reject original runs from another workflow and unrel
     tag: 'v2.0.0',
     repository: 'owner/repo',
     sha256: 'b'.repeat(64),
+    notes: 'Original release notes',
+    expected_assets: {
+      'final.tgz': 'sha256:' + 'b'.repeat(64),
+      'final.json': 'sha256:' + 'd'.repeat(64),
+    },
   };
   for (const extra of [{ WRONG_WORKFLOW: 'true' }, { WRONG_ROLE: 'true' }]) {
     const value = report({ ...base, targets: { npm: receipt }, artifacts: [original] }, extra);
@@ -134,4 +139,33 @@ test('outcome observes failed downloads and always preserves its durable artifac
   assert.match(result, /name: Preserve aggregate result\n\s+if: always\(\)/);
   assert.match(result, /FINAL_RELEASE_DOWNLOAD_OUTCOME:/);
   assert.match(result, /FINAL_RELEASE_ARTIFACT_ID:/);
+});
+
+test('failure Summary never offers recovery for conflicting remote notes/assets or unknown readback', () => {
+  const original = {
+    artifact_id: '34',
+    source_run_id: '12',
+    source_attempt: '1',
+    tag: 'v2.0.0',
+    repository: 'owner/repo',
+    sha256: 'b'.repeat(64),
+    notes: 'Original release notes',
+    expected_assets: {
+      'final.tgz': 'sha256:' + 'b'.repeat(64),
+      'final.json': 'sha256:' + 'd'.repeat(64),
+    },
+  };
+  for (const mode of ['notes-conflict', 'asset-conflict', 'read-error']) {
+    const value = report(
+      { ...base, targets: { npm: receipt }, artifacts: [original] },
+      { REMOTE_MODE: mode },
+    );
+    assert.equal(value.result.recovery.available, false, mode);
+    assert.equal(
+      value.result.recovery.publication_state,
+      mode === 'read-error' ? 'unknown' : 'conflict',
+      mode,
+    );
+    assert.doesNotMatch(value.summary, /gh workflow run/, mode);
+  }
 });
