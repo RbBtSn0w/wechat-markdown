@@ -1,3 +1,4 @@
+import { releaseEnv, releaseDecision } from './helpers/release-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { prepare, publish } from '../scripts/release-payload.mjs';
@@ -20,7 +21,7 @@ test('prepare injects only manifest version and preserves packed executable byte
   );
   mkdirSync(join(pkg, 'dist'));
   writeFileSync(join(pkg, 'dist/cli.js'), 'console.log("packed");');
-  await prepare({}, { cwd, nextRelease: { version: '2.0.0' } });
+  await prepare({}, { cwd, env: releaseEnv(cwd), nextRelease: releaseDecision(cwd, '2.0.0') });
   assert.equal(readFileSync(join(pkg, 'dist/cli.js'), 'utf8'), 'console.log("packed");');
   const manifest = JSON.parse(
     execFileSync('tar', ['-xOf', join(cwd, 'release-input/final.tgz'), 'package/package.json'], {
@@ -41,13 +42,14 @@ test('registry identities are verified, missing targets receive the identical ar
       join(root, 'package.json'),
       JSON.stringify({ name: '@scope/fixture', version: '1.0.0' }),
     );
-    await prepare({}, { cwd, nextRelease: { version: '1.1.0' } });
+    await prepare({}, { cwd, env: releaseEnv(cwd), nextRelease: releaseDecision(cwd, '1.1.0') });
     const bin = join(cwd, 'bin');
     mkdirSync(bin);
     writeFileSync(
       join(bin, 'npm'),
       `#!/usr/bin/env node
 const fs=require('node:fs'),path=require('node:path');const args=process.argv.slice(2);const target=args.at(-1).includes('github')?'github':'npm';const marker=path.join(process.env.STATE,target);const metadata=JSON.parse(fs.readFileSync(path.join(process.env.STATE,'release-input/final.json')));
+if(args[0]==='view'&&args[2]==='dist-tags'){console.log(JSON.stringify({latest:metadata.version}));process.exit(0);}
 if(args[0]==='view') {if(process.env.MODE==='lookup-failed'){console.error('network unavailable');process.exit(1);}if(process.env.MODE==='mismatch'){console.log(JSON.stringify('sha512-wrong'));process.exit(0);}if((process.env.MODE==='missing'||process.env.MODE==='mirror-failed')&&!fs.existsSync(marker)){console.log(JSON.stringify({error:{code:'E404'}}));process.exit(1);}console.log(JSON.stringify(metadata.integrity));}
 else {if(process.env.MODE==='mirror-failed'&&target==='github'){console.error('mirror denied');process.exit(23);}fs.writeFileSync(marker,args[1]);}
 `,
@@ -56,13 +58,13 @@ else {if(process.env.MODE==='mirror-failed'&&target==='github'){console.error('m
     const context = {
       cwd,
       env: {
-        ...process.env,
-        PATH: bin + ':' + process.env.PATH,
+        ...releaseEnv(cwd),
+        PATH: bin + ':' + releaseEnv(cwd).PATH,
         STATE: cwd,
         MODE: mode,
         CANDIDATE_SHA: 'a'.repeat(40),
       },
-      nextRelease: { version: '1.1.0' },
+      nextRelease: releaseDecision(cwd, '1.1.0'),
     };
     if (['mismatch', 'lookup-failed', 'mirror-failed'].includes(mode))
       await assert.rejects(publish({}, context));
