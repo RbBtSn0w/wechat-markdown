@@ -1,4 +1,4 @@
-import { parseNpmView } from '../.github/release-train/npm-view.mjs';
+import { parseNpmView, createNpmObservationBudget } from '../.github/release-train/npm-view.mjs';
 import {
   verifyLatest,
   assertNoKnownNewerLatest,
@@ -12,15 +12,7 @@ import {
 // Stateless semantic-release payload hooks. Version selection belongs to the engine.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import {
-  readFileSync,
-  writeFileSync,
-  readdirSync,
-  statSync,
-  mkdirSync,
-  existsSync,
-  unlinkSync,
-} from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 function digest(path) {
@@ -140,12 +132,15 @@ export async function publish(_options, { cwd, env, nextRelease }) {
   const receipts = join(input, 'receipts');
   mkdirSync(receipts, { recursive: true });
   const deferredErrors = [];
+  // One deadline covers both registries, byte visibility and channel delivery.
+  const observationBudget = _options.observationBudget ?? createNpmObservationBudget();
+  const commandTimeout = () => Math.min(120000, observationBudget.assertRemaining());
   for (const [target, registry] of [
     ['npm', 'https://registry.npmjs.org'],
     ['github-packages', 'https://npm.pkg.github.com'],
   ]) {
+    observationBudget.assertRemaining();
     const receiptPath = join(receipts, `${target}.json`);
-    if (existsSync(receiptPath)) unlinkSync(receiptPath);
     const npmrc = join(input, `${target}.npmrc`);
     // Keep the GitHub token out of npmjs requests; npmjs uses trusted publishing.
     writeFileSync(
@@ -153,8 +148,8 @@ export async function publish(_options, { cwd, env, nextRelease }) {
       target === 'github-packages' ? '//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}\n' : '',
     );
     const runEnv = { ...env, NPM_CONFIG_IGNORE_SCRIPTS: 'true', NPM_CONFIG_USERCONFIG: npmrc };
-    const tagOptions = { cwd: input, env: runEnv, registry };
-    const distributionTag = _options.recovery ? recoveryTag(metadata, tagOptions) : 'latest';
+    const tagOptions = () => ({ cwd: input, env: runEnv, registry, timeout: commandTimeout() });
+    const distributionTag = _options.recovery ? recoveryTag(metadata, tagOptions()) : 'latest';
     const args = [
       'view',
       `${metadata.name}@${metadata.version}`,
@@ -163,26 +158,45 @@ export async function publish(_options, { cwd, env, nextRelease }) {
       '--registry',
       registry,
     ];
-    const view = spawnSync('npm', args, {
-      cwd: input,
-      env: runEnv,
-      encoding: 'utf8',
-      timeout: 120000,
-    });
-    if (view.error) throw view.error;
-    if (view.status === 0) {
-      if (parseNpmView(view.stdout) !== metadata.integrity)
-        throw Error(`${target}: existing version differs from final archive`);
-    } else {
-      let error;
-      try {
-        error = parseNpmView(view.stdout).error;
-      } catch {
-        /* fail closed below */
+    const readIntegrity = (timeout) => {
+      const view = spawnSync('npm', args, {
+        cwd: input,
+        env: runEnv,
+        encoding: 'utf8',
+        timeout: Math.min(120000, timeout),
+      });
+      if (view.error) throw view.error;
+      const value = parseNpmView(view.stdout);
+      if (view.status !== 0) {
+        if (value?.error?.code === 'E404') return null;
+        throw Error(`${target}: registry lookup failed: ${view.stderr || view.stdout}`);
       }
-      if (error?.code !== 'E404') throw Error(`${target}: registry lookup failed: ${view.stderr}`);
+      if (value !== metadata.integrity)
+        throw Error(`${target}: existing version differs from final archive`);
+      return value;
+    };
+    let publicationEvidence = {};
+    if (readIntegrity(commandTimeout()) === null) {
       // Reject known channel regression; this read is not a compare-and-swap.
-      if (!_options.recovery) assertNoKnownNewerLatest(metadata, tagOptions);
+      if (!_options.recovery) assertNoKnownNewerLatest(metadata, tagOptions());
+      const pending = {
+        ...metadata,
+        ...publicationEvidence,
+        registry,
+        status: 'unknown',
+        request_started_at: new Date().toISOString(),
+        reason: 'Publication request started; registry acceptance and availability are not confirmed',
+        observed_at: new Date().toISOString(),
+        remote_id: `${metadata.name}@${metadata.version}`,
+        url:
+          target === 'npm'
+            ? `https://www.npmjs.com/package/${metadata.name}/v/${metadata.version}`
+            : `https://github.com/${metadata.repository}/packages`,
+        bytes_verified: false,
+      };
+      // Persist sealed identity before requesting publication: a lost response may still publish.
+      observationBudget.assertRemaining();
+      writeFileSync(receiptPath, JSON.stringify(pending));
       execFileSync(
         'npm',
         [
@@ -197,45 +211,41 @@ export async function publish(_options, { cwd, env, nextRelease }) {
           registry,
           ...(target === 'npm' ? ['--provenance'] : []),
         ],
-        { cwd: input, env: runEnv, stdio: 'inherit', timeout: 120000 },
+        { cwd: input, env: runEnv, stdio: 'inherit', timeout: commandTimeout() },
       );
-      let verified = false;
-      let detail = '';
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const actual = spawnSync('npm', args, {
-          cwd: input,
-          env: runEnv,
-          encoding: 'utf8',
-          timeout: 120000,
-        });
-        try {
-          verified =
-            !actual.error &&
-            actual.status === 0 &&
-            parseNpmView(actual.stdout) === metadata.integrity;
-        } catch {
-          /* Malformed or not-yet-visible registry metadata remains unverified. */
-        }
-        if (verified) break;
-        detail = actual.error?.message || actual.stderr || actual.stdout;
-        if (attempt < 2) await new Promise((done) => setTimeout(done, 1000 * (attempt + 1)));
-      }
-      if (!verified) throw Error(`${target}: published integrity could not be verified: ${detail}`);
+      publicationEvidence = { publication_accepted: true, accepted_at: new Date().toISOString(), reason: 'Registry accepted publication; availability is not confirmed' };
+      writeFileSync(receiptPath, JSON.stringify({ ...pending, ...publicationEvidence }));
+      await observationBudget.wait(readIntegrity);
     }
     const bytesObservedAt = new Date().toISOString();
     let channel;
     try {
       // Safe recovery helpers observe latest and retain temporary tags; they never add/remove tags.
       if (_options.recovery) {
-        reconcileLatest(metadata, tagOptions);
-        cleanRecoveryTag(metadata, distributionTag, tagOptions);
+        reconcileLatest(metadata, tagOptions());
+        cleanRecoveryTag(metadata, distributionTag, tagOptions());
       }
-      channel = verifyLatest(metadata, tagOptions);
+      if (_options.recovery) channel = verifyLatest(metadata, tagOptions());
+      else
+        channel = await observationBudget.wait((timeout) => {
+          try {
+            return verifyLatest(metadata, {
+              cwd: input,
+              env: runEnv,
+              registry,
+              timeout: Math.min(120000, timeout),
+            });
+          } catch (error) {
+            if (error.code === 'NPM_CHANNEL_PENDING') return null;
+            throw error;
+          }
+        });
     } catch (error) {
       writeFileSync(
         receiptPath,
         JSON.stringify({
           ...metadata,
+          ...publicationEvidence,
           registry,
           status: 'unknown',
           observed_at: bytesObservedAt,
@@ -258,7 +268,9 @@ export async function publish(_options, { cwd, env, nextRelease }) {
       join(receipts, `${target}.json`),
       JSON.stringify({
         ...metadata,
+        ...publicationEvidence,
         status: 'completed',
+        reason: 'Original bytes and channel confirmed',
         bytes_verified: true,
         registry,
         latest_version: channel.latest_version,
@@ -273,6 +285,7 @@ export async function publish(_options, { cwd, env, nextRelease }) {
       }),
     );
   }
+  observationBudget.assertRemaining();
   if (!deferredErrors.length)
     writeFileSync(join(input, 'released-version'), `${nextRelease.version}\n`);
   return {

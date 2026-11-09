@@ -72,7 +72,7 @@ jobs:
           node-version: '24'
 
       - name: Use trusted-publishing npm
-        run: npm install -g npm@11.21.0 --ignore-scripts
+        run: npm install -g npm@12.2.2 --ignore-scripts
 
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund --ignore-scripts
@@ -163,6 +163,8 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '24'
+      - name: Install release npm 12
+        run: npm install --global npm@12.2.2 --ignore-scripts --no-audit --no-fund
       - name: Audit production dependencies with bounded retries
         run: |
           for attempt in 1 2 3; do
@@ -200,7 +202,7 @@ jobs:
           node-version: '24'
 
       - name: Use trusted-publishing npm
-        run: npm install -g npm@11.21.0 --ignore-scripts
+        run: npm install -g npm@12.2.2 --ignore-scripts
 
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund --ignore-scripts
@@ -312,7 +314,7 @@ jobs:
         with:
           node-version: '24'
       - name: Use trusted-publishing npm
-        run: npm install -g npm@11.21.0 --ignore-scripts
+        run: npm install -g npm@12.2.2 --ignore-scripts
       - name: Install recovery tooling without lifecycle scripts
         run: npm ci --no-audit --no-fund --ignore-scripts
       - name: Recover original sealed targets
