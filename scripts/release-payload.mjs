@@ -1,3 +1,4 @@
+import { parseNpmView } from '../.github/release-train/npm-view.mjs';
 import {
   verifyLatest,
   assertNoKnownNewerLatest,
@@ -170,12 +171,12 @@ export async function publish(_options, { cwd, env, nextRelease }) {
     });
     if (view.error) throw view.error;
     if (view.status === 0) {
-      if (JSON.parse(view.stdout) !== metadata.integrity)
+      if (parseNpmView(view.stdout) !== metadata.integrity)
         throw Error(`${target}: existing version differs from final archive`);
     } else {
       let error;
       try {
-        error = JSON.parse(view.stdout).error;
+        error = parseNpmView(view.stdout).error;
       } catch {
         /* fail closed below */
       }
@@ -211,7 +212,7 @@ export async function publish(_options, { cwd, env, nextRelease }) {
           verified =
             !actual.error &&
             actual.status === 0 &&
-            JSON.parse(actual.stdout) === metadata.integrity;
+            parseNpmView(actual.stdout) === metadata.integrity;
         } catch {
           /* Malformed or not-yet-visible registry metadata remains unverified. */
         }
