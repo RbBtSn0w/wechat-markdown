@@ -36,6 +36,7 @@ async function fixture(mode) {
   writeFileSync(
     join(bin, 'npm'),
     `#!/usr/bin/env node
+const log=console.log;console.log=value=>log(process.env.NPM_VIEW_ARRAY==='true'?JSON.stringify([JSON.parse(value)]):value);
 const fs=require('fs'),path=require('path'),args=process.argv.slice(2),state=process.env.STATE,mode=process.env.MODE,metadata=JSON.parse(fs.readFileSync(path.join(state,'release-input/final.json'))),target=args.at(-1).includes('github')?'github':'npm',marker=path.join(state,'published-'+target+'.tgz'),tagsFile=path.join(state,'tags.json'),tags=JSON.parse(fs.readFileSync(tagsFile));
 fs.appendFileSync(path.join(state,'calls.jsonl'),JSON.stringify({target,args})+'\\n');
 if(args[0]==='view'&&args[2]==='dist-tags'){
@@ -115,4 +116,20 @@ test('an already matching version remains read-only and can observe a newer late
     calls.filter((call) => call.args[0] === 'view' && call.args[2] === 'dist-tags').length,
     2,
   );
+});
+
+test('npm 12 array responses preserve byte verification and both normal registry publications', async () => {
+  for (const mode of ['older', 'package-missing', 'existing']) {
+    const { cwd, context, original } = await fixture(mode);
+    context.env.NPM_VIEW_ARRAY = 'true';
+    await publish({}, context);
+    for (const target of ['npm', 'github-packages'])
+      assert.equal(
+        JSON.parse(readFileSync(join(cwd, `release-input/receipts/${target}.json`))).status,
+        'completed',
+      );
+    if (mode !== 'existing')
+      for (const target of ['npm', 'github'])
+        assert.deepEqual(readFileSync(join(cwd, `published-${target}.tgz`)), original);
+  }
 });
