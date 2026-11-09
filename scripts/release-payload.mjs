@@ -185,7 +185,8 @@ export async function publish(_options, { cwd, env, nextRelease }) {
         registry,
         status: 'unknown',
         request_started_at: new Date().toISOString(),
-        reason: 'Publication request started; registry acceptance and availability are not confirmed',
+        reason:
+          'Publication request started; registry acceptance and availability are not confirmed',
         observed_at: new Date().toISOString(),
         remote_id: `${metadata.name}@${metadata.version}`,
         url:
@@ -213,7 +214,11 @@ export async function publish(_options, { cwd, env, nextRelease }) {
         ],
         { cwd: input, env: runEnv, stdio: 'inherit', timeout: commandTimeout() },
       );
-      publicationEvidence = { publication_accepted: true, accepted_at: new Date().toISOString(), reason: 'Registry accepted publication; availability is not confirmed' };
+      publicationEvidence = {
+        publication_accepted: true,
+        accepted_at: new Date().toISOString(),
+        reason: 'Registry accepted publication; availability is not confirmed',
+      };
       writeFileSync(receiptPath, JSON.stringify({ ...pending, ...publicationEvidence }));
       await observationBudget.wait(readIntegrity);
     }
