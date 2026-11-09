@@ -43,7 +43,7 @@ test('matching registry bytes with stale, absent, malformed or unreadable latest
     const { cwd, context } = await fixture(mode);
     await assert.rejects(
       publish({ observationBudget: fastBudget() }, context),
-      /latest|channel|tag|availability/i,
+      /latest|channel|tag|availability|observation/i,
     );
     const receipt = JSON.parse(readFileSync(join(cwd, 'release-input/receipts/npm.json')));
     assert.equal(receipt.status, 'unknown', mode);
@@ -76,9 +76,12 @@ test('channel deferral cannot turn ordinary publication into a successful partia
   const { cwd, context } = await fixture('stale');
   await assert.rejects(
     publish({ deferChannelErrors: true, observationBudget: fastBudget() }, context),
-    /latest|channel|availability/i,
+    /latest|channel|availability|observation/i,
   );
-  assert.equal(existsSync(join(cwd, 'release-input/receipts/github-packages.json')), false);
+  assert.equal(
+    JSON.parse(readFileSync(join(cwd, 'release-input/receipts/github-packages.json'))).status,
+    'not-run',
+  );
   assert.equal(existsSync(join(cwd, 'release-input/released-version')), false);
 });
 

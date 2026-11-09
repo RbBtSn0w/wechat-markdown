@@ -1,3 +1,4 @@
+import { npmRequestState } from '../.github/release-train/npm-view.mjs';
 import { sealedTagFormat } from '../.github/release-train/npm-channel.mjs';
 // Recovery uses current trusted workflow code and the original sealed publication bytes.
 import { execFileSync } from 'node:child_process';
@@ -206,6 +207,11 @@ export function selectRecoveryEntries(entries) {
     Object.values(selected).map((entry) => (entry.includes('/') ? 'release-input' : '')),
   );
   if (roots.size !== 1) throw Error('Ambiguous recovery payload root');
+  const prefix = Object.values(selected)[0].startsWith('release-input/') ? 'release-input/' : '';
+  for (const target of ['npm', 'github-packages']) {
+    const name = `receipts/${target}.json`;
+    if (entries.includes(prefix + name)) selected[name] = prefix + name;
+  }
   return selected;
 }
 // Read the original sealed payload without publishing or altering the checkout.
@@ -250,7 +256,10 @@ export function inspectRecovery({
         execFileSync('unzip', ['-p', zip, entry], { maxBuffer: 100 * 1024 * 1024 }),
       ]),
     );
-    for (const [name, bytes] of Object.entries(files)) writeFileSync(join(input, name), bytes);
+    for (const [name, bytes] of Object.entries(files)) {
+      mkdirSync(join(input, 'receipts'), { recursive: true });
+      writeFileSync(join(input, name), bytes);
+    }
     const metadata = JSON.parse(files['final.json']),
       analysis = JSON.parse(files['analysis.json']);
     validatePayload(metadata, analysis, join(input, 'final.tgz'));
@@ -261,6 +270,10 @@ export function inspectRecovery({
       String(metadata.source_run_id) !== String(sourceRunId)
     )
       throw Error('Original payload provenance mismatch');
+    for (const target of ['npm', 'github-packages']) {
+      const bytes = files[`receipts/${target}.json`];
+      if (bytes) npmRequestState(metadata, JSON.parse(bytes));
+    }
     const publicationObservation = observeRelease({ metadata, notes: analysis.notes, input });
     const expectedAssets = Object.fromEntries(
       ['final.tgz', 'final.json'].map((name) => [
@@ -294,8 +307,10 @@ export async function recover() {
       `Recovery blocked before registry writes: ${publicationObservation.recovery.reason}`,
     );
   mkdirSync('release-input', { recursive: true });
-  for (const [name, bytes] of Object.entries(files))
+  for (const [name, bytes] of Object.entries(files)) {
+    mkdirSync('release-input/receipts', { recursive: true });
     writeFileSync(join('release-input', name), bytes);
+  }
   writeFileSync(
     'release-input/recovery.json',
     JSON.stringify({

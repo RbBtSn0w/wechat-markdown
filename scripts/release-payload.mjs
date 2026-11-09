@@ -1,4 +1,9 @@
-import { parseNpmView, createNpmObservationBudget } from '../.github/release-train/npm-view.mjs';
+import {
+  createNpmObservationBudget,
+  npmRequestState,
+  parseNpmIntegrity,
+  allowRecoveryRequest,
+} from '../.github/release-train/npm-view.mjs';
 import {
   verifyLatest,
   assertNoKnownNewerLatest,
@@ -12,7 +17,7 @@ import {
 // Stateless semantic-release payload hooks. Version selection belongs to the engine.
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 function digest(path) {
@@ -132,6 +137,12 @@ export async function publish(_options, { cwd, env, nextRelease }) {
   const receipts = join(input, 'receipts');
   mkdirSync(receipts, { recursive: true });
   const deferredErrors = [];
+  if (!_options.recovery)
+    for (const target of ['npm', 'github-packages']) {
+      const path = join(receipts, `${target}.json`);
+      if (!existsSync(path))
+        writeFileSync(path, JSON.stringify({ ...metadata, status: 'not-run' }));
+    }
   // One deadline covers both registries, byte visibility and channel delivery.
   const observationBudget = _options.observationBudget ?? createNpmObservationBudget();
   const commandTimeout = () => Math.min(120000, observationBudget.assertRemaining());
@@ -165,18 +176,35 @@ export async function publish(_options, { cwd, env, nextRelease }) {
         encoding: 'utf8',
         timeout: Math.min(120000, timeout),
       });
-      if (view.error) throw view.error;
-      const value = parseNpmView(view.stdout);
-      if (view.status !== 0) {
-        if (value?.error?.code === 'E404') return null;
-        throw Error(`${target}: registry lookup failed: ${view.stderr || view.stdout}`);
-      }
-      if (value !== metadata.integrity)
-        throw Error(`${target}: existing version differs from final archive`);
-      return value;
+      return parseNpmIntegrity(view, metadata.integrity, target);
     };
-    let publicationEvidence = {};
-    if (readIntegrity(commandTimeout()) === null) {
+    const prior = existsSync(receiptPath)
+      ? JSON.parse(readFileSync(receiptPath, 'utf8'))
+      : undefined;
+    const requestState = npmRequestState(metadata, prior);
+    let publicationEvidence = prior || {};
+    if (prior)
+      writeFileSync(
+        receiptPath,
+        JSON.stringify({
+          ...prior,
+          status: 'unknown',
+          bytes_verified: false,
+          channel_blocked: false,
+          reason: 'Rechecking the original request; availability is not confirmed',
+        }),
+      );
+    const visible = readIntegrity(commandTimeout());
+    if (visible === null && _options.recovery && requestState === 'unconfirmed')
+      throw Object.assign(
+        Error(`${target}: original request evidence is missing; cannot authorize retransmission`),
+        { code: 'NPM_REQUEST_UNCONFIRMED' },
+      );
+    const canSend =
+      visible === null &&
+      requestState !== 'observe' &&
+      (!_options.recovery || allowRecoveryRequest({ env, timeout: commandTimeout() }));
+    if (visible === null && canSend) {
       // Reject known channel regression; this read is not a compare-and-swap.
       if (!_options.recovery) assertNoKnownNewerLatest(metadata, tagOptions());
       const pending = {
@@ -220,6 +248,19 @@ export async function publish(_options, { cwd, env, nextRelease }) {
         reason: 'Registry accepted publication; availability is not confirmed',
       };
       writeFileSync(receiptPath, JSON.stringify({ ...pending, ...publicationEvidence }));
+    }
+    if (visible === null) {
+      if (!canSend)
+        writeFileSync(
+          receiptPath,
+          JSON.stringify({
+            ...metadata,
+            ...publicationEvidence,
+            status: 'unknown',
+            bytes_verified: false,
+            reason: 'A prior request may already be in progress; observing without another upload',
+          }),
+        );
       await observationBudget.wait(readIntegrity);
     }
     const bytesObservedAt = new Date().toISOString();
@@ -276,6 +317,7 @@ export async function publish(_options, { cwd, env, nextRelease }) {
         ...publicationEvidence,
         status: 'completed',
         reason: 'Original bytes and channel confirmed',
+        channel_blocked: false,
         bytes_verified: true,
         registry,
         latest_version: channel.latest_version,
@@ -290,7 +332,6 @@ export async function publish(_options, { cwd, env, nextRelease }) {
       }),
     );
   }
-  observationBudget.assertRemaining();
   if (!deferredErrors.length)
     writeFileSync(join(input, 'released-version'), `${nextRelease.version}\n`);
   return {

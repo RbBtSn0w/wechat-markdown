@@ -90,6 +90,7 @@ test('recovery reads only controlled ZIP members and rejects traversal, duplicat
     'final.json': 'final.json',
     'final.tgz': 'final.tgz',
     'analysis.json': 'analysis.json',
+    'receipts/npm.json': 'receipts/npm.json',
   });
   for (const extra of [
     '../escape',
