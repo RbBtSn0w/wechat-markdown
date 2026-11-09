@@ -1,6 +1,7 @@
 import {
   createNpmObservationBudget,
   npmRequestState,
+  npmRequestFacts,
   parseNpmIntegrity,
   allowRecoveryRequest,
 } from '../.github/release-train/npm-view.mjs';
@@ -160,7 +161,6 @@ export async function publish(_options, { cwd, env, nextRelease }) {
     );
     const runEnv = { ...env, NPM_CONFIG_IGNORE_SCRIPTS: 'true', NPM_CONFIG_USERCONFIG: npmrc };
     const tagOptions = () => ({ cwd: input, env: runEnv, registry, timeout: commandTimeout() });
-    const distributionTag = _options.recovery ? recoveryTag(metadata, tagOptions()) : 'latest';
     const args = [
       'view',
       `${metadata.name}@${metadata.version}`,
@@ -182,18 +182,20 @@ export async function publish(_options, { cwd, env, nextRelease }) {
       ? JSON.parse(readFileSync(receiptPath, 'utf8'))
       : undefined;
     const requestState = npmRequestState(metadata, prior);
-    let publicationEvidence = prior || {};
+    let publicationEvidence = npmRequestFacts(metadata, prior);
     if (prior)
       writeFileSync(
         receiptPath,
         JSON.stringify({
-          ...prior,
+          ...metadata,
+          ...publicationEvidence,
           status: 'unknown',
           bytes_verified: false,
           channel_blocked: false,
           reason: 'Rechecking the original request; availability is not confirmed',
         }),
       );
+    const distributionTag = _options.recovery ? recoveryTag(metadata, tagOptions()) : 'latest';
     const visible = readIntegrity(commandTimeout());
     if (visible === null && _options.recovery && requestState === 'unconfirmed')
       throw Object.assign(
