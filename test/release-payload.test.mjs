@@ -2,7 +2,7 @@ import { releaseEnv, releaseDecision } from './helpers/release-env.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { prepare, publish } from '../scripts/release-payload.mjs';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -75,7 +75,10 @@ else {if(process.env.MODE==='mirror-failed'&&target==='github'){console.error('m
     }
     if (mode === 'mirror-failed') {
       assert.ok(readFileSync(join(input, 'receipts/npm.json'), 'utf8'));
-      assert.equal(existsSync(join(input, 'receipts/github-packages.json')), false);
+      assert.equal(
+        JSON.parse(readFileSync(join(input, 'receipts/github-packages.json'))).status,
+        'unknown',
+      );
     }
   }
 });
