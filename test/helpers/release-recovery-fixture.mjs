@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-export function runRecovery(mode = 'missing-assets', tag = 'v2.0.0') {
+export function runRecovery(mode = 'missing-assets', tag = 'v2.0.0', phased = false) {
   const cwd = mkdtempSync(join(tmpdir(), 'release-recovery-flow-'));
   const input = join(cwd, 'sealed');
   mkdirSync(input);
@@ -40,6 +40,7 @@ export function runRecovery(mode = 'missing-assets', tag = 'v2.0.0') {
     join(input, 'analysis.json'),
     JSON.stringify({ ...metadata, notes: 'Original release notes' }),
   );
+
   mkdirSync(join(input, 'receipts'));
   for (const target of ['npm', 'github-packages'])
     writeFileSync(
@@ -68,7 +69,9 @@ export function runRecovery(mode = 'missing-assets', tag = 'v2.0.0') {
       'final.tgz',
       'final.json',
       'analysis.json',
-      ...(mode === 'receipt-missing' ? [] : ['receipts/npm.json', 'receipts/github-packages.json']),
+      ...(['receipt-missing', 'visible-legacy-receipts'].includes(mode)
+        ? []
+        : ['receipts/npm.json', 'receipts/github-packages.json']),
     ],
     { cwd: input },
   );
@@ -118,7 +121,7 @@ const read=name=>fs.readFileSync(path.join(state,name));
 function release(){const mutated=fs.existsSync(path.join(state,'draft-published'));return {id:mode==='mutation-id'&&mutated?78:77,tag_name:'${metadata.tag}',body:(mode==='notes-conflict'||mode==='mutation-notes'&&mutated)?'Conflicting notes':'Original release notes',prerelease:mode==='mutation-channel'&&mutated,draft:!fs.existsSync(path.join(state,'draft-published')),assets:['final.tgz','final.json'].filter(name=>fs.existsSync(path.join(state,'uploaded-'+name))).map((name,index)=>({id:index+101,name,digest:'sha256:'+(mode==='asset-conflict'?'f'.repeat(64):crypto.createHash('sha256').update(read('uploaded-'+name)).digest('hex'))})),html_url:'https://github.com/owner/repo/releases/tag/${metadata.tag}'};}
 if(args[0]==='api') {
  const url=args[1];
- if(url.includes('/actions/artifacts?name=release-recovery-intent-12-34'))console.log(JSON.stringify([{artifacts:[{id:78,name:'release-recovery-intent-12-34',expired:false,workflow_run:{id:56}},...(mode==='prior-recovery-request'?[{id:77,name:'release-recovery-intent-12-34',expired:false,workflow_run:{id:55}}]:[])]}]));
+ if(url.includes('/actions/artifacts?name=release-recovery-intent-')){const name=new URL('https://fixture/'+url).searchParams.get('name'),target=name.endsWith('-github-packages')?'github-packages':'npm';const current=!process.env.PHASED||fs.existsSync(path.join(state,'intent-'+target));console.log(JSON.stringify([{artifacts:name==='release-recovery-intent-12-34'?(mode==='legacy-recovery-intent'?[{id:77,name,expired:false,workflow_run:{id:55}}]:[]):[...(current?[{id:target==='npm'?78:79,name,expired:false,workflow_run:{id:56}}]:[]),...(mode==='prior-recovery-request'?[{id:77,name,expired:false,workflow_run:{id:55}}]:[])]}]));}
  else if(url.endsWith('/runs/55'))console.log(JSON.stringify({id:55,repository:{full_name:'owner/repo'},path:'.github/workflows/release.yml',head_branch:'main',event:'workflow_dispatch'}));
  else if(url.endsWith('/runs/12')){if(mode==='stale-source-read-error'){console.error('original run unavailable');process.exit(22);}process.stdout.write(read('run.json'));}
  else if(url.endsWith('/artifacts/34'))process.stdout.write(read('artifact.json'));
@@ -142,15 +145,26 @@ else {console.error('unexpected write '+args);process.exit(99);}
     for (const name of ['final.tgz', 'final.json'])
       writeFileSync(join(cwd, 'uploaded-' + name), readFileSync(join(input, name)));
 
-  if (['accepted-request', 'uncertain-request', 'prior-recovery-request'].includes(mode))
+  if (
+    [
+      'accepted-request',
+      'uncertain-request',
+      'prior-recovery-request',
+      'legacy-recovery-intent',
+      'visible-legacy-receipts',
+    ].includes(mode)
+  )
     writeFileSync(join(cwd, 'npm.tgz'), original);
-  if (mode === 'prior-recovery-request') writeFileSync(join(cwd, 'mirror.tgz'), original);
+  if (
+    ['prior-recovery-request', 'legacy-recovery-intent', 'visible-legacy-receipts'].includes(mode)
+  )
+    writeFileSync(join(cwd, 'mirror.tgz'), original);
   writeFileSync(
     join(cwd, 'bin/npm'),
     `#!/usr/bin/env node
 const fs=require('fs'),path=require('path');const args=process.argv.slice(2);const state=process.env.STATE,marker=path.join(state,args.at(-1).includes('github')?'mirror.tgz':'npm.tgz');const metadata=JSON.parse(fs.readFileSync(path.join(state,'release-input/final.json')));
 if(args[0]==='view'&&args[2]==='dist-tags'){const tag='recovery-12';console.log(JSON.stringify({...(process.env.REMOTE_MODE==='channel-missing'?{}:{latest:(process.env.REMOTE_MODE==='channel-older'||process.env.REMOTE_MODE==='channel-npm-only'&&!args.at(-1).includes('github'))?'1.0.0':'9.0.0'}),...(fs.existsSync(marker+'.tag')?{[tag]:'2.0.0'}:{})}));}
-else if(args[0]==='view'){if(['accepted-request','uncertain-request','prior-recovery-request'].includes(process.env.REMOTE_MODE)&&!args.at(-1).includes('github')&&!fs.existsSync(marker+'.observed')){fs.writeFileSync(marker+'.observed','true');console.log(JSON.stringify({error:{code:'E404'}}));process.exit(1);}if(process.env.REMOTE_MODE==='registry-bytes-conflict'){console.log(JSON.stringify('sha512-conflicting'));process.exit(0);}if(process.env.REMOTE_MODE==='registry-read-error'){console.error('package identity unavailable');process.exit(22);}if(!fs.existsSync(marker)){console.log(JSON.stringify({error:{code:'E404'}}));process.exit(1);}console.log(JSON.stringify(metadata.integrity));}
+else if(args[0]==='view'){if(['accepted-request','uncertain-request','prior-recovery-request','legacy-recovery-intent'].includes(process.env.REMOTE_MODE)&&!args.at(-1).includes('github')&&!fs.existsSync(marker+'.observed')){fs.writeFileSync(marker+'.observed','true');console.log(JSON.stringify({error:{code:'E404'}}));process.exit(1);}if(process.env.REMOTE_MODE==='registry-bytes-conflict'){console.log(JSON.stringify('sha512-conflicting'));process.exit(0);}if(process.env.REMOTE_MODE==='registry-read-error'||process.env.REMOTE_MODE==='accepted-invisible'&&fs.existsSync(marker)&&!args.at(-1).includes('github')){console.error('package identity unavailable');process.exit(22);}if(!fs.existsSync(marker)){console.log(JSON.stringify({error:{code:'E404'}}));process.exit(1);}console.log(JSON.stringify(metadata.integrity));}
 else if(args[0]==='publish'){fs.appendFileSync(path.join(state,'registry-writes.jsonl'),JSON.stringify(args)+'\\n');const tag=args[args.indexOf('--tag')+1];if(!tag.startsWith('recovery-')){console.error('recovery must preserve newer latest');process.exit(97);}fs.copyFileSync(args[1],marker);fs.writeFileSync(marker+'.tag',tag);}
 else if(args[0]==='dist-tag'&&args[1]!=='rm'){fs.appendFileSync(path.join(state,'channel-mutations.jsonl'),JSON.stringify(args)+'\\n');process.exit(98);}
 else if(args[0]==='dist-tag'&&args[1]==='rm'&&args[3]==='recovery-12'){fs.appendFileSync(path.join(state,'channel-mutations.jsonl'),JSON.stringify(args)+'\\n');fs.unlinkSync(marker+'.tag');}
@@ -195,22 +209,65 @@ else process.exit(98);
       );
     writeFileSync(join(cwd, 'release-input/receipts/future-target.json'), '{"status":"completed"}');
   }
-  const result = spawnSync(process.execPath, [resolve('scripts/release-recover.mjs')], {
-    cwd,
-    env: {
-      ...process.env,
-      PATH: join(cwd, 'bin') + ':' + process.env.PATH,
-      STATE: cwd,
-      REMOTE_MODE: mode,
-      RELEASE_ENABLED: 'true',
-      GITHUB_REPOSITORY: 'owner/repo',
-      GITHUB_SHA: 'b'.repeat(40),
-      SOURCE_RUN_ID: '12',
-      ARTIFACT_ID: '34',
-      GITHUB_RUN_ID: '56',
-      RECOVERY_INTENT_ARTIFACT_ID: '78',
-    },
-    encoding: 'utf8',
-  });
+  const env = {
+    ...process.env,
+    PATH: join(cwd, 'bin') + ':' + process.env.PATH,
+    STATE: cwd,
+    REMOTE_MODE: mode,
+    RELEASE_ENABLED: 'true',
+    GITHUB_REPOSITORY: 'owner/repo',
+    GITHUB_SHA: 'b'.repeat(40),
+    SOURCE_RUN_ID: '12',
+    ARTIFACT_ID: '34',
+    GITHUB_RUN_ID: '56',
+    RECOVERY_INTENT_NPM_ID: '78',
+    RECOVERY_INTENT_GITHUB_PACKAGES_ID: '79',
+    ...(phased
+      ? {
+          PHASED: 'true',
+          RUNNER_TEMP: cwd,
+          GITHUB_ENV: join(cwd, 'env'),
+          GITHUB_OUTPUT: join(cwd, 'output'),
+        }
+      : {}),
+  };
+  let result;
+  const invoke = (phase) =>
+    spawnSync(process.execPath, [resolve('scripts/release-recover.mjs')], {
+      cwd,
+      env: { ...env, RECOVERY_PHASE: phase },
+      encoding: 'utf8',
+    });
+  if (!phased) result = invoke('all');
+  else {
+    result = invoke('prepare');
+    if (result.status === 0) {
+      Object.assign(
+        env,
+        Object.fromEntries(
+          readFileSync(join(cwd, 'env'), 'utf8')
+            .trim()
+            .split('\n')
+            .map((line) => line.split('=')),
+        ),
+      );
+      if (mode === 'prepared-dispatch-conflict') env.SOURCE_RUN_ID = '13';
+      for (const target of ['npm', 'github-packages']) {
+        env.RECOVERY_TARGET = target;
+        writeFileSync(join(cwd, 'output'), '');
+        result = invoke('preflight');
+        if (result.status !== 0) break;
+        if (readFileSync(join(cwd, 'output'), 'utf8').includes('intent_needed=true'))
+          writeFileSync(join(cwd, 'intent-' + target), 'true');
+        result = invoke('registry');
+        if (result.status !== 0) break;
+      }
+      if (result.status === 0) {
+        if (mode === 'finalize-expired-budget') env.RECOVERY_OBSERVATION_DEADLINE_NS = '1';
+        result = invoke('finalize');
+      }
+    }
+  }
+
   return { cwd, result, original };
 }

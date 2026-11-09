@@ -135,6 +135,10 @@ export async function publish(_options, { cwd, env, nextRelease }) {
     )
       throw Error('Publication identity differs from the original sealed analysis');
   }
+  if (_options.target && !['npm', 'github-packages'].includes(_options.target))
+    throw Error('Invalid recovery target');
+  if (_options.preflight && (!_options.recovery || !_options.target))
+    throw Error('Preflight requires one recovery target');
   const receipts = join(input, 'receipts');
   mkdirSync(receipts, { recursive: true });
   const deferredErrors = [];
@@ -151,6 +155,7 @@ export async function publish(_options, { cwd, env, nextRelease }) {
     ['npm', 'https://registry.npmjs.org'],
     ['github-packages', 'https://npm.pkg.github.com'],
   ]) {
+    if (_options.target && _options.target !== target) continue;
     observationBudget.assertRemaining();
     const receiptPath = join(receipts, `${target}.json`);
     const npmrc = join(input, `${target}.npmrc`);
@@ -183,7 +188,7 @@ export async function publish(_options, { cwd, env, nextRelease }) {
       : undefined;
     const requestState = npmRequestState(metadata, prior);
     let publicationEvidence = npmRequestFacts(metadata, prior);
-    if (prior)
+    if (prior && requestState !== 'unsent')
       writeFileSync(
         receiptPath,
         JSON.stringify({
@@ -197,15 +202,22 @@ export async function publish(_options, { cwd, env, nextRelease }) {
       );
     const distributionTag = _options.recovery ? recoveryTag(metadata, tagOptions()) : 'latest';
     const visible = readIntegrity(commandTimeout());
-    if (visible === null && _options.recovery && requestState === 'unconfirmed')
+    if (_options.recovery && requestState === 'unconfirmed' && visible === null)
       throw Object.assign(
         Error(`${target}: original request evidence is missing; cannot authorize retransmission`),
         { code: 'NPM_REQUEST_UNCONFIRMED' },
       );
+    if (_options.preflight)
+      return {
+        intent_needed:
+          visible === null &&
+          requestState === 'unsent' &&
+          allowRecoveryRequest({ env, target, preflight: true, timeout: commandTimeout() }),
+      };
     const canSend =
       visible === null &&
       requestState !== 'observe' &&
-      (!_options.recovery || allowRecoveryRequest({ env, timeout: commandTimeout() }));
+      (!_options.recovery || allowRecoveryRequest({ env, target, timeout: commandTimeout() }));
     if (visible === null && canSend) {
       // Reject known channel regression; this read is not a compare-and-swap.
       if (!_options.recovery) assertNoKnownNewerLatest(metadata, tagOptions());
@@ -245,6 +257,7 @@ export async function publish(_options, { cwd, env, nextRelease }) {
         { cwd: input, env: runEnv, stdio: 'inherit', timeout: commandTimeout() },
       );
       publicationEvidence = {
+        request_started_at: pending.request_started_at,
         publication_accepted: true,
         accepted_at: new Date().toISOString(),
         reason: 'Registry accepted publication; availability is not confirmed',
@@ -334,7 +347,7 @@ export async function publish(_options, { cwd, env, nextRelease }) {
       }),
     );
   }
-  if (!deferredErrors.length)
+  if (!_options.recovery && !_options.target && !deferredErrors.length)
     writeFileSync(join(input, 'released-version'), `${nextRelease.version}\n`);
   return {
     name: 'npm and GitHub Packages',
