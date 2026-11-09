@@ -100,7 +100,7 @@ jobs:
         run: |
           npm run typecheck
           npm run lint
-          npm test -- --testTimeout=15000
+          GITHUB_STEP_SUMMARY="$RUNNER_TEMP/candidate-test-summary.md" npm test -- --testTimeout=15000
           npm run build
           node --test test/release-*.test.mjs
           npm run format:check
