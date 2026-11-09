@@ -223,3 +223,17 @@ test('later phases reject a prepared payload belonging to a different dispatch',
   for (const target of ['npm', 'github-packages'])
     assert.equal(existsSync(join(cwd, 'intent-' + target)), false);
 });
+
+test('standalone finalization rejects receipts without original observation and channel evidence', () => {
+  for (const key of [
+    'latest_version',
+    'channel_observed_at',
+    'observed_at',
+    'remote_id',
+    'bytes_verified',
+  ]) {
+    const { cwd, result } = runRecovery('finalize-invalid-' + key, 'v2.0.0', true);
+    assert.notEqual(result.status, 0, key);
+    assert.equal(existsSync(join(cwd, 'release-input/released-version')), false, key);
+  }
+});

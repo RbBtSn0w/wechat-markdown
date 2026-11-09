@@ -1,3 +1,4 @@
+import { assertNpmReceiptConfirmed } from '../.github/release-train/npm-channel.mjs';
 import {
   npmRequestState,
   createNpmObservationBudget,
@@ -346,12 +347,11 @@ export function finalizeRecovery(metadata, analysis, errors = []) {
       readFileSync(join('release-input', 'receipts', target + '.json'), 'utf8'),
     );
     npmRequestState(metadata, receipt);
-    if (
-      receipt.status !== 'completed' ||
-      receipt.bytes_verified !== true ||
-      receipt.channel_blocked
-    )
-      errors.push(Error(`${target}: ${receipt.reason || 'Original recovery remains incomplete'}`));
+    try {
+      assertNpmReceiptConfirmed(metadata, receipt);
+    } catch (error) {
+      errors.push(new Error(`${target}: ${receipt.reason || error.message}`, { cause: error }));
+    }
   }
   if (errors.length)
     throw new AggregateError(

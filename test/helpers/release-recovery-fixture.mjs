@@ -264,6 +264,12 @@ else process.exit(98);
       }
       if (result.status === 0) {
         if (mode === 'finalize-expired-budget') env.RECOVERY_OBSERVATION_DEADLINE_NS = '1';
+        if (mode.startsWith('finalize-invalid-')) {
+          const file = join(cwd, 'release-input/receipts/npm.json'),
+            receipt = JSON.parse(readFileSync(file));
+          delete receipt[mode.slice('finalize-invalid-'.length)];
+          writeFileSync(file, JSON.stringify(receipt));
+        }
         result = invoke('finalize');
       }
     }
