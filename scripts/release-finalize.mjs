@@ -1,9 +1,13 @@
-import { validateOriginalPlan } from '../.github/release-train/release-entrypoint.mjs';
+import { inspectReportPlan } from '../.github/release-train/release-entrypoint.mjs';
 // Merge explicit immutable producer observations without discarding healthy evidence.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join, relative } from 'node:path';
-import { writeResult, reportExitCode } from '../.github/release-train/release-result.mjs';
+import {
+  writeResult,
+  reportExitCode,
+  collectReportInputErrors,
+} from '../.github/release-train/release-result.mjs';
 import { recoveryFromArtifact } from '../.github/release-train/observe-github.mjs';
 import { observeRelease } from './release-observe.mjs';
 import { inspectRecovery } from './release-recover.mjs';
@@ -89,6 +93,8 @@ for (const source of sources) {
       targets[name] = observation;
   }
 }
+const producerErrors = collectReportInputErrors(sources);
+if (producerErrors.length) result.verification = 'failed';
 const stages = [
   ['verification', process.env.FINAL_VERIFY_RESULT],
   ['audit', process.env.FINAL_AUDIT_RESULT],
@@ -98,9 +104,13 @@ const stages = [
 const failure = stages.find(([, status]) => ['failure', 'cancelled'].includes(status));
 if (stages.slice(0, 2).some(([, status]) => ['failure', 'cancelled'].includes(status)))
   result.verification = 'failed';
-if (process.env.FINAL_OPERATION === 'recover' && process.env.RELEASE_ENABLED !== 'true')
+if (
+  !producerErrors.length &&
+  process.env.FINAL_OPERATION === 'recover' &&
+  process.env.RELEASE_ENABLED !== 'true'
+)
   result.verification = 'not-run';
-const infrastructure = [...observationErrors];
+const infrastructure = [...observationErrors, ...producerErrors.map((error) => error.message)];
 for (const producer of ['VERIFY', 'RELEASE', 'RECOVER', 'DISABLED_RECOVERY']) {
   const id = process.env[`FINAL_${producer}_ARTIFACT_ID`],
     outcome = process.env[`FINAL_${producer}_DOWNLOAD_OUTCOME`],
@@ -110,6 +120,10 @@ for (const producer of ['VERIFY', 'RELEASE', 'RECOVER', 'DISABLED_RECOVERY']) {
   else if (id !== undefined && status && status !== 'skipped' && !id)
     infrastructure.push(`${producer.toLowerCase()} producer did not retain a result artifact ID`);
 }
+const producerEvidence = result.artifacts?.find((artifact) => artifact.pipeline);
+const producerPlan = producerEvidence
+  ? { ...producerEvidence, candidate_sha: result.candidate_sha, version: result.version }
+  : undefined;
 let inspectedOriginal = null,
   inspectionFailed = false;
 const dispatch =
@@ -128,7 +142,11 @@ if (dispatch) {
     identity_verified: false,
     blocked_reason: 'Original dispatch identities have not been verified',
   };
-  if (process.env.RELEASE_ENABLED === 'true') {
+  if (
+    process.env.RELEASE_ENABLED === 'true' &&
+    !producerErrors.length &&
+    !inspectReportPlan(producerPlan).error
+  ) {
     try {
       inspectedOriginal = inspectRecovery({
         repository: process.env.GITHUB_REPOSITORY,
@@ -171,14 +189,16 @@ const retainedPlan =
 const plan = retainedPlan
   ? { ...retainedPlan, candidate_sha: result.candidate_sha, version: result.version }
   : undefined;
-const originalPipeline = validateOriginalPlan(plan);
+const { original: originalPipeline, error: planError } = inspectReportPlan(plan);
 if (originalPipeline) intended = originalPipeline.pipeline.goals.map((goal) => goal.id);
 else if (process.env.FINAL_OPERATION === 'recover' && Array.isArray(result.intended_targets))
   intended = [...result.intended_targets];
 for (const id of intended) targets[id] ??= { status: 'not-run' };
 // A historical recovery without an envelope keeps its legacy goal contract.
 const resultConfig =
-  process.env.FINAL_OPERATION === 'recover' && !originalPipeline ? { schema_version: 1 } : config;
+  producerErrors.length || (process.env.FINAL_OPERATION === 'recover' && !originalPipeline)
+    ? { schema_version: 1 }
+    : config;
 const sealed =
   result.artifacts?.find((artifact) => artifact.artifact_id) ||
   result.artifacts?.find((artifact) => /^[a-f0-9]{64}$/.test(artifact.sha256 || ''));
@@ -195,7 +215,9 @@ if (
   process.env.RELEASE_ENABLED === 'true' &&
   result.version &&
   !Object.values(targets).every((target) => target.status === 'completed') &&
-  !inspectionFailed
+  !inspectionFailed &&
+  !planError &&
+  !producerErrors.length
 ) {
   const original = dispatch || (result.recovery?.source_run_id ? result.recovery : sealed);
   result.recovery = {
@@ -280,6 +302,6 @@ const final = writeResult(
       ...(failure ? [{ message: `${failure[0]} job ${failure[1]}; inspect its Actions log` }] : []),
     ],
   },
-  { config: resultConfig, plan },
+  { config: resultConfig, plan: producerErrors.length ? undefined : plan },
 );
 process.exitCode = reportExitCode(final);

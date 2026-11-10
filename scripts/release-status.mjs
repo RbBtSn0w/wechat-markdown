@@ -1,4 +1,4 @@
-import { validateOriginalPlan } from '../.github/release-train/release-entrypoint.mjs';
+import { inspectReportPlan } from '../.github/release-train/release-entrypoint.mjs';
 import { sealedTagFormat } from '../.github/release-train/npm-channel.mjs';
 // Product-specific observations. Only channel readback can confirm publication.
 import { createHash } from 'node:crypto';
@@ -16,7 +16,7 @@ const enabled = process.env.RELEASE_ENABLED === 'true';
 const operation = process.argv[2];
 const config = read('.github/release-train.json') || {};
 const plan = metadata.pipeline ? metadata : analysis;
-const original = validateOriginalPlan(plan);
+const { original } = inspectReportPlan(plan);
 const intended = original?.pipeline.goals.map((goal) => goal.id) ||
   config.intended_targets || [
     'npm',
