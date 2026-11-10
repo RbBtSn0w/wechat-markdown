@@ -1,3 +1,4 @@
+import { validateOriginalPlan } from '../.github/release-train/release-entrypoint.mjs';
 import { assertNpmReceiptConfirmed } from '../.github/release-train/npm-channel.mjs';
 import {
   npmRequestState,
@@ -29,6 +30,10 @@ import { observeRelease } from './release-observe.mjs';
 import { publish } from './release-payload.mjs';
 const sha256 = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
 export function validatePayload(metadata, analysis, archive) {
+  validateOriginalPlan(metadata);
+  validateOriginalPlan(analysis);
+  if (metadata.pipeline?.digest !== analysis.pipeline?.digest)
+    throw Error('Original sealed pipeline differs from verified analysis');
   if (
     sealedTagFormat({ ...metadata, tag_format: metadata.tag_format ?? analysis.tag_format }) !==
     sealedTagFormat(analysis)
