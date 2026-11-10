@@ -1,3 +1,4 @@
+import { validateOriginalPlan } from '../.github/release-train/release-entrypoint.mjs';
 import { sealedTagFormat } from '../.github/release-train/npm-channel.mjs';
 // Product-specific observations. Only channel readback can confirm publication.
 import { createHash } from 'node:crypto';
@@ -13,12 +14,16 @@ const analysis =
 const metadata = read('release-input/final.json') || {};
 const enabled = process.env.RELEASE_ENABLED === 'true';
 const operation = process.argv[2];
-const intended = read('.github/release-train.json')?.intended_targets || [
-  'npm',
-  'github-packages',
-  'github-release',
-  ...(process.env.RELEASE_HOMEBREW === 'true' ? ['homebrew'] : []),
-];
+const config = read('.github/release-train.json') || {};
+const plan = metadata.pipeline ? metadata : analysis;
+const original = validateOriginalPlan(plan);
+const intended = original?.pipeline.goals.map((goal) => goal.id) ||
+  config.intended_targets || [
+    'npm',
+    'github-packages',
+    'github-release',
+    ...(process.env.RELEASE_HOMEBREW === 'true' ? ['homebrew'] : []),
+  ];
 let verification = 'not-run';
 if (operation === 'verify')
   verification =
@@ -72,6 +77,7 @@ try {
           repository: metadata.repository,
           sha256: metadata.sha256,
           notes: analysis.notes,
+          ...(original ? { pipeline: plan.pipeline } : {}),
           expected_assets: Object.fromEntries(
             ['final.tgz', 'final.json'].map((name) => [
               name,
@@ -100,7 +106,11 @@ writeResult(
     intended_targets: intended,
     concluded: true,
     targets,
-    artifacts: sealed ? [sealed] : [],
+    artifacts: sealed
+      ? [sealed]
+      : original
+        ? [{ candidate_sha: candidate, version, pipeline: plan.pipeline, notes: analysis.notes }]
+        : [],
     failure_stage: inputErrors.length ? 'report-inputs' : failed ? operation : null,
     recovery,
     errors: inputErrors.concat(
@@ -116,5 +126,9 @@ writeResult(
         : [],
     ),
   },
-  { summaryPath: null },
+  {
+    config: operation === 'recover' && !original ? { schema_version: 1 } : config,
+    plan,
+    summaryPath: null,
+  },
 );

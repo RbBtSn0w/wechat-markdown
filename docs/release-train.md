@@ -296,3 +296,26 @@ If the next registry lookup temporarily returns E404, recovery waits within the
 shared budget without creating another request intent or publishing again.
 Finalization checks complete payload, remote identity and channel observations;
 it cannot declare delivery from the receipt status alone.
+
+## Pipeline capability configuration
+
+`.github/release-train.json` owns configuration schema v2 / pipeline protocol v1,
+required goals, existing execution bindings and cadence. The current explicit
+schedule preserves Friday 15:00 Asia/Singapore (07:00 UTC). A new explicit empty
+cadence uses Friday 15:00 Asia/Shanghai; changing cadence is a normal configuration
+change, not a release approval. Runtime dispatch inputs do not change the schedule.
+
+With isolated `yaml@2.9.1` provisioned in `RELEASE_TOOLS`, run the read-only checks:
+
+```bash
+node .github/release-train/pipeline-contract.mjs check
+node .github/release-train/cadence.mjs check
+```
+
+An explicit maintenance `cadence.mjs update` changes only the native schedule
+projection; review that diff. Original plans retain exact identity, notes and goals.
+Reports/recovery use those original goals after configuration or main advances; old
+plans remain compatible and never acquire invented receipts. Public capability
+coordination stays separate from product/platform implementations and existing CI
+job permissions. Activation, credentials and existing delivery destinations are
+unchanged by configuration migration.

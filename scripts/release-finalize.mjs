@@ -1,3 +1,4 @@
+import { validateOriginalPlan } from '../.github/release-train/release-entrypoint.mjs';
 // Merge explicit immutable producer observations without discarding healthy evidence.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -58,13 +59,13 @@ const sources = observations('release-observations').sort(
 const config = existsSync('.github/release-train.json')
   ? JSON.parse(readFileSync('.github/release-train.json'))
   : {};
-const intended = config.intended_targets || [
+let intended = config.intended_targets || [
   'npm',
   'github-packages',
   'github-release',
   ...(process.env.RELEASE_HOMEBREW === 'true' ? ['homebrew'] : []),
 ];
-const targets = Object.fromEntries(intended.map((name) => [name, { status: 'not-run' }]));
+const targets = {};
 let result = {
   candidate_sha: process.env.GITHUB_SHA,
   baseline_tag: null,
@@ -149,6 +150,7 @@ if (dispatch) {
             repository: metadata.repository,
             sha256: metadata.sha256,
             notes: analysis.notes,
+            ...(analysis.pipeline ? { pipeline: analysis.pipeline } : {}),
             expected_assets: expectedAssets,
           },
         ],
@@ -164,6 +166,19 @@ if (dispatch) {
     }
   }
 }
+const retainedPlan =
+  inspectedOriginal?.analysis || result.artifacts?.find((artifact) => artifact.pipeline);
+const plan = retainedPlan
+  ? { ...retainedPlan, candidate_sha: result.candidate_sha, version: result.version }
+  : undefined;
+const originalPipeline = validateOriginalPlan(plan);
+if (originalPipeline) intended = originalPipeline.pipeline.goals.map((goal) => goal.id);
+else if (process.env.FINAL_OPERATION === 'recover' && Array.isArray(result.intended_targets))
+  intended = [...result.intended_targets];
+for (const id of intended) targets[id] ??= { status: 'not-run' };
+// A historical recovery without an envelope keeps its legacy goal contract.
+const resultConfig =
+  process.env.FINAL_OPERATION === 'recover' && !originalPipeline ? { schema_version: 1 } : config;
 const sealed =
   result.artifacts?.find((artifact) => artifact.artifact_id) ||
   result.artifacts?.find((artifact) => /^[a-f0-9]{64}$/.test(artifact.sha256 || ''));
@@ -246,21 +261,25 @@ if (blockedChannels.length) {
     })),
   ];
 }
-const final = writeResult('release-result.json', {
-  ...result,
-  publication: undefined,
-  schema_version: 2,
-  enabled: process.env.RELEASE_ENABLED === 'true',
-  concluded: true,
-  intended_targets: intended,
-  targets,
-  failure_stage: infrastructure.length
-    ? 'report-inputs'
-    : failure?.[0] || result.failure_stage || null,
-  errors: [
-    ...infrastructure.map((message) => ({ message })),
-    ...(result.errors || []),
-    ...(failure ? [{ message: `${failure[0]} job ${failure[1]}; inspect its Actions log` }] : []),
-  ],
-});
+const final = writeResult(
+  'release-result.json',
+  {
+    ...result,
+    publication: undefined,
+    schema_version: 2,
+    enabled: process.env.RELEASE_ENABLED === 'true',
+    concluded: true,
+    intended_targets: intended,
+    targets,
+    failure_stage: infrastructure.length
+      ? 'report-inputs'
+      : failure?.[0] || result.failure_stage || null,
+    errors: [
+      ...infrastructure.map((message) => ({ message })),
+      ...(result.errors || []),
+      ...(failure ? [{ message: `${failure[0]} job ${failure[1]}; inspect its Actions log` }] : []),
+    ],
+  },
+  { config: resultConfig, plan },
+);
 process.exitCode = reportExitCode(final);

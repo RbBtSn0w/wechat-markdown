@@ -1,3 +1,4 @@
+import { validateOriginalPlan } from '../.github/release-train/release-entrypoint.mjs';
 import {
   createNpmObservationBudget,
   npmRequestState,
@@ -63,6 +64,7 @@ export async function prepare(_options, { cwd, env = process.env, nextRelease })
     root = join(input, 'unpacked/package');
   // The verified engine decision is mandatory and immutable across prepare.
   const analysis = JSON.parse(readFileSync(join(input, 'analysis.json'), 'utf8'));
+  validateOriginalPlan(analysis);
   if (
     !/^[a-f0-9]{40}$/.test(analysis.candidate_sha || '') ||
     analysis.candidate_sha !== env.CANDIDATE_SHA ||
@@ -105,6 +107,8 @@ export async function prepare(_options, { cwd, env = process.env, nextRelease })
       tag: nextRelease.gitTag,
       tag_format: tagFormat,
       baseline_tag: analysis.baseline_tag || null,
+      notes: analysis.notes,
+      ...(analysis.pipeline ? { pipeline: analysis.pipeline } : {}),
     }),
   );
   assertLiveMain(cwd, env);
@@ -115,6 +119,11 @@ export async function publish(_options, { cwd, env, nextRelease }) {
   const input = join(cwd, 'release-input'),
     archive = join(input, 'final.tgz');
   const metadata = JSON.parse(readFileSync(join(input, 'final.json'), 'utf8'));
+  validateOriginalPlan(metadata);
+  const originalAnalysis = JSON.parse(readFileSync(join(input, 'analysis.json'), 'utf8'));
+  validateOriginalPlan(originalAnalysis);
+  if (metadata.pipeline?.digest !== originalAnalysis.pipeline?.digest)
+    throw Error('Original sealed pipeline differs from verified analysis');
   if (
     metadata.version !== nextRelease.version ||
     metadata.integrity !== `sha512-${digest(archive)}`
