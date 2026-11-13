@@ -5,6 +5,23 @@ import { inlineWechatCss, renderMarkdownToWechat } from '../src';
 const options = { renderMath: false, renderMermaid: false };
 
 describe('input boundaries', () => {
+  it.each([
+    ['https://a.test/a?x=1&copy=2', 'https://a.test/a?x=1&copy=2'],
+    ['https://a.test/a?x=1&reg=2', 'https://a.test/a?x=1&reg=2'],
+    ['https://a.test/a?x=1&notit=2', 'https://a.test/a?x=1&notit=2'],
+    ['https://a.test/a?x=1&amp;y=2', 'https://a.test/a?x=1&y=2'],
+    ['https://a.test/a?x=1&#38;y=2', 'https://a.test/a?x=1&y=2'],
+    ['https://a.test/a?x=1&amp;amp;y=2', 'https://a.test/a?x=1&amp;y=2'],
+    ['https://a.test/a?x=&quot;onmouseover=&quot;end', 'https://a.test/a?x="onmouseover="end'],
+  ])('decodes autolink entities once while retaining safe attributes: %s', async (source, text) => {
+    const result = await renderMarkdownToWechat(source, options);
+    const $ = load(result.html);
+    expect($('a').text()).toBe(text);
+    expect(new URL($('a').attr('href')!).href).toBe(new URL(text).href);
+    expect($('a').attr('onmouseover')).toBeUndefined();
+    expect($('script')).toHaveLength(0);
+  });
+
   it.each(['engine', 'inliner'])(
     'keeps the article when a relative href is malformed (%s)',
     async (entry) => {
