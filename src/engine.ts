@@ -1,6 +1,7 @@
 import { Marked, Renderer, Token, Tokenizer, Tokens } from 'marked';
 import { load } from 'cheerio';
 import { Parser as HtmlParser } from 'htmlparser2';
+import { decodeHTMLStrict } from 'entities';
 import { errorMessage } from './errors';
 import { validateSiteUrl } from './urls';
 import yaml from 'yaml';
@@ -209,7 +210,7 @@ export class WechatMarkdownEngine {
 
     // 6. Parse Markdown to HTML via marked with syntax highlighting
     const markedRenderer = new Renderer();
-    markedRenderer.code = (code: string, infostring?: string) => {
+    markedRenderer.code = ({ text: code, lang: infostring }: Tokens.Code) => {
       const lang = (infostring || '').match(/^\S*/)?.[0] || '';
       const { highlighted, language } = highlightCode(code, lang, showLineNumber);
       const safeLang = escapeHtmlAttribute(language.replace(/[^\w#+.-]/g, ''));
@@ -218,6 +219,15 @@ export class WechatMarkdownEngine {
           ? ` class="language-${safeLang} hljs"`
           : ' class="hljs"';
       return `<pre><code${langClass}>${highlighted}</code></pre>\n`;
+    };
+    markedRenderer.link = function (this: Renderer, token: Tokens.Link) {
+      // Preserve existing URL semantics; the default renderer escapes decoded values once.
+      return Renderer.prototype.link.call(
+        this,
+        token.autolink
+          ? { ...token, href: decodeHTMLStrict(token.href), text: decodeHTMLStrict(token.text) }
+          : token,
+      );
     };
 
     const parser = new Marked({ gfm: true, breaks: false, renderer: markedRenderer });

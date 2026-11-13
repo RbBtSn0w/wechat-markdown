@@ -3,6 +3,23 @@ import { load } from 'cheerio';
 import { renderMarkdownToWechat } from '../src';
 
 describe('Markdown token boundaries', () => {
+  it.each(['typescript title="example"', 'unknown-language', ''])(
+    'renders fenced code text safely through renderer tokens: %j',
+    async (info) => {
+      const code = 'const value = "<script>";\nconsole.log(value);';
+      const result = await renderMarkdownToWechat('```' + info + '\n' + code + '\n```', {
+        renderMath: false,
+        renderMermaid: false,
+        macCodeBlock: false,
+      });
+      const $ = load(result.html);
+      expect($('pre code').text()).toContain('const value = "<script>";');
+      expect($('pre code').text()).toContain('console.log(value);');
+      expect($('script')).toHaveLength(0);
+      expect(result.html).not.toContain('[object Object]');
+    },
+  );
+
   it.each([
     'Before\n$$\nx+y\n$$\nAfter',
     '> Before\n> $$\n> x+y\n> $$\n> After',

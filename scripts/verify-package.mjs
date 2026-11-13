@@ -49,6 +49,12 @@ const { renderMarkdownToWechat } = require('@rbbtsn0w/wechat-markdown');
   assert.ok(result.html.includes('package'));
   assert.ok(result.html.includes('style="'));
   assert.ok(!result.html.includes('class="'));
+  const structured = await renderMarkdownToWechat('    const value = "<script>";\\n\\nhttps://a.test/?x=1&copy=2&y=3', {
+    renderMath: false, renderMermaid: false, macCodeBlock: false,
+  });
+  assert.ok(structured.html.includes('&lt;script&gt;'));
+  assert.ok(!structured.html.includes('<script>'));
+  assert.ok(structured.html.includes('href="https://a.test/?x=1&amp;copy=2&amp;y=3"'));
 })().catch(error => { console.error(error); process.exitCode = 1; });
 `,
   );

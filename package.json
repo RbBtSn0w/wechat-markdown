@@ -52,14 +52,15 @@
     "axios": "^1.13.6",
     "highlight.js": "^11.12.0",
     "juice": "^12.2.0",
-    "marked": "^12.0.2",
+    "marked": "^18.1.3",
     "mathjax-full": "^3.2.2",
     "pako": "^3.0.2",
     "sanitize-html": "^2.18.1",
     "sharp": "^0.35.5",
     "yaml": "^2.8.2",
     "cheerio": "^1.2.0",
-    "htmlparser2": "^12.0.0"
+    "htmlparser2": "^12.0.0",
+    "entities": "^8.1.0"
   },
   "overrides": {
     "@xmldom/xmldom": "^0.9.12",
