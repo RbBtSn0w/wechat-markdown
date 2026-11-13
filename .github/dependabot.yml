@@ -8,7 +8,20 @@ updates:
     commit-message:
       prefix: 'chore(deps)'
     open-pull-requests-limit: 10
+    ignore:
+      # Source and exported declarations continue to target Node.js 22.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      # notes-generator 14 uses writer 8; preset 10 requires writer 9.
+      - dependency-name: 'conventional-changelog-conventionalcommits'
+        update-types: ['version-update:semver-major']
     groups:
+      eslint-toolchain:
+        patterns:
+          - 'eslint'
+          - '@eslint/js'
+          - '@typescript-eslint/*'
+          - 'globals'
       npm_and_yarn:
         patterns:
           - '*'
