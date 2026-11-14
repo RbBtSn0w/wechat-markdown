@@ -65,7 +65,7 @@
   "overrides": {
     "@xmldom/xmldom": "^0.9.12",
     "source-map-js": "^1.2.2",
-    "ip-address": "^10.7.3",
+    "ip-address": "$ip-address",
     "undici": "^7.30.1",
     "npm": "12.2.2",
     "@actions/http-client": {
