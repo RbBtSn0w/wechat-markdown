@@ -123,22 +123,43 @@ export function splitHighlightedHtmlByLines(html: string): string[] {
 }
 
 /**
- * Replaces tab indentation and leading/consecutive whitespace with &nbsp;,
- * ensuring indentation survives WeChat rich text sanitization while preserving
- * standard single spaces between words for searchability.
+ * Turns spaces and tabs in code text nodes into &nbsp; where required to survive WeChat sanitization.
+ *
+ * highlight.js emits each token as its own `<span>`, so the space in
+ * `class Canvas` is a whitespace-only text node between tags (`</span> <span>`).
+ * WeChat's editor drops those nodes (`classCanvas`) even when the parent sets `white-space: pre`.
+ * To survive, any whitespace text node between tags, spaces adjacent to tags, and consecutive
+ * spaces are rewritten as `&nbsp;`. Single spaces inside non-tagged text chunks and plaintext
+ * code lines are preserved so searchability, test assertions, and copy-paste remain clean.
  */
 export function formatCodeLine(lineHtml: string): string {
   let formatted = lineHtml.replace(/\t/g, '    ');
-  // Transform only the text content outside tags:
-  formatted = formatted.replace(/(<[^>]+>)|([^<]+)/g, (match, tag, text) => {
-    if (tag) return tag;
-    return text.replace(/ {2,}/g, (m: string) => '&nbsp;'.repeat(m.length));
-  });
+  const hasTags = /<[^>]+>/.test(formatted);
+
+  if (hasTags) {
+    formatted = formatted.replace(
+      /(<[^>]+>)|([^<]+)/g,
+      (_match, tag: string | undefined, text: string | undefined) => {
+        if (tag) return tag;
+        if (/^ +$/.test(text!)) {
+          return '&nbsp;'.repeat(text!.length);
+        }
+        return text!
+          .replace(/^ +/, (m: string) => '&nbsp;'.repeat(m.length))
+          .replace(/ +$/, (m: string) => '&nbsp;'.repeat(m.length))
+          .replace(/ {2,}/g, (m: string) => '&nbsp;'.repeat(m.length));
+      },
+    );
+  } else {
+    formatted = formatted.replace(/ {2,}/g, (m: string) => '&nbsp;'.repeat(m.length));
+  }
+
   // Match leading spaces, even if preceded by open tags like <span ...>
   formatted = formatted.replace(
     /^((?:<[^>]+>)*)( +)/,
     (_, tags, spaces) => tags + '&nbsp;'.repeat(spaces.length),
   );
+
   return formatted === '' ? '&nbsp;' : formatted;
 }
 
