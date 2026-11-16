@@ -128,36 +128,31 @@ export function splitHighlightedHtmlByLines(html: string): string[] {
  * highlight.js emits each token as its own `<span>`, so the space in
  * `class Canvas` is a whitespace-only text node between tags (`</span> <span>`).
  * WeChat's editor drops those nodes (`classCanvas`) even when the parent sets `white-space: pre`.
- * To survive, any whitespace text node between tags, spaces adjacent to tags, and consecutive
- * spaces are rewritten as `&nbsp;`. Single spaces inside non-tagged text chunks and plaintext
- * code lines are preserved so searchability, test assertions, and copy-paste remain clean.
+ * Protect boundary whitespace outside string literals. String text can be split by nested
+ * interpolation spans; changing those fragments would change copied string values.
+ * Internal whitespace in plaintext is also preserved because its literal scope is unknown.
  */
 export function formatCodeLine(lineHtml: string): string {
-  let formatted = lineHtml.replace(/\t/g, '    ');
-  const hasTags = /<[^>]+>/.test(formatted);
-
-  if (hasTags) {
-    formatted = formatted.replace(
-      /(<[^>]+>)|([^<]+)/g,
-      (_match, tag: string | undefined, text: string | undefined) => {
-        if (tag) return tag;
-        if (/^ +$/.test(text!)) {
-          return '&nbsp;'.repeat(text!.length);
+  const literalSpans: boolean[] = [];
+  const formatted = lineHtml.replace(
+    /(<[^>]+>)|([^<]+)/g,
+    (_match, tag: string | undefined, text: string | undefined) => {
+      if (tag) {
+        if (/^<\/span\b/.test(tag)) literalSpans.pop();
+        else if (/^<span\b/.test(tag)) {
+          const parentIsLiteral = literalSpans.at(-1) ?? false;
+          const isSubstitution = /\bhljs-subst\b/.test(tag);
+          literalSpans.push(
+            !isSubstitution && (parentIsLiteral || /\bhljs-(?:string|regexp)\b/.test(tag)),
+          );
         }
-        return text!
-          .replace(/^ +/, (m: string) => '&nbsp;'.repeat(m.length))
-          .replace(/ +$/, (m: string) => '&nbsp;'.repeat(m.length))
-          .replace(/ {2,}/g, (m: string) => '&nbsp;'.repeat(m.length));
-      },
-    );
-  } else {
-    formatted = formatted.replace(/ {2,}/g, (m: string) => '&nbsp;'.repeat(m.length));
-  }
-
-  // Match leading spaces, even if preceded by open tags like <span ...>
-  formatted = formatted.replace(
-    /^((?:<[^>]+>)*)( +)/,
-    (_, tags, spaces) => tags + '&nbsp;'.repeat(spaces.length),
+        return tag;
+      }
+      if (literalSpans.at(-1)) return text!;
+      return text!.replace(/^[ \t]+|[ \t]+$/g, (spaces) =>
+        '&nbsp;'.repeat(spaces.replace(/\t/g, '    ').length),
+      );
+    },
   );
 
   return formatted === '' ? '&nbsp;' : formatted;

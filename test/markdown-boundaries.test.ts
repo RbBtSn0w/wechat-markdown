@@ -3,6 +3,21 @@ import { load } from 'cheerio';
 import { renderMarkdownToWechat } from '../src';
 
 describe('Markdown token boundaries', () => {
+  it.each([
+    ['swift', 'print("hello \\(name) world")'],
+    ['swift', 'print("\\(first) \\(last)")'],
+    ['swift', 'print("hello  world")'],
+    ['javascript', 'console.log(`hello ${name} world`)'],
+    ['javascript', 'console.log(`${first} ${last}`)'],
+    ['unknown-language', 'print("hello  world")'],
+  ])('preserves literal whitespace before normalization: %s %s', async (language, code) => {
+    const result = await renderMarkdownToWechat('```' + language + '\n' + code + '\n```', {
+      renderMath: false,
+      renderMermaid: false,
+    });
+    expect(load(result.html)('pre code').text()).toBe(code);
+  });
+
   it.each([false, true])(
     'keeps code text after dropping ordinary whitespace-only nodes (macCodeBlock=%s)',
     async (macCodeBlock) => {
