@@ -142,6 +142,28 @@ describe('Plugins Test Suite', () => {
       expect(highlighted).toContain('class');
     });
 
+    it('keeps spaces between highlight tokens as non-breaking spaces', () => {
+      const code = [
+        'class CanvasNodeView: UIView {',
+        '    func refreshBorder() {',
+        '        layer.borderWidth = 1.0 / UIScreen.main.scale',
+        '    }',
+        '}',
+        'if UIDevice.current.orientation.isLandscape {',
+        '} else {',
+      ].join('\n');
+      const { highlighted } = highlightCode(code, 'swift');
+
+      expect(highlighted).toContain('hljs-keyword">class</span>&nbsp;<span');
+      expect(highlighted).toContain('hljs-keyword">func</span>&nbsp;<span');
+      expect(highlighted).toContain('hljs-keyword">if</span>&nbsp;<span');
+      expect(highlighted).toContain('hljs-keyword">else</span>&nbsp;{');
+      expect(highlighted).toContain(
+        '&nbsp;&nbsp;&nbsp;&nbsp;<span class="hljs-keyword">func</span>',
+      );
+      expect(highlighted).not.toMatch(/> </);
+    });
+
     it('falls back to safe escaped plaintext on unknown language', () => {
       const code = '<div>custom & unusual <syntax></div>';
       const { highlighted, language } = highlightCode(code, 'unknown-xyz');

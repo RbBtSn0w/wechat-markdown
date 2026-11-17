@@ -3,6 +3,63 @@ import { load } from 'cheerio';
 import { renderMarkdownToWechat } from '../src';
 
 describe('Markdown token boundaries', () => {
+  it.each([
+    ['swift', 'print("hello \\(name) world")'],
+    ['swift', 'print("\\(first) \\(last)")'],
+    ['swift', 'print("hello  world")'],
+    ['javascript', 'console.log(`hello ${name} world`)'],
+    ['javascript', 'console.log(`${first} ${last}`)'],
+    ['unknown-language', 'print("hello  world")'],
+  ])('preserves literal whitespace before normalization: %s %s', async (language, code) => {
+    const result = await renderMarkdownToWechat('```' + language + '\n' + code + '\n```', {
+      renderMath: false,
+      renderMermaid: false,
+    });
+    expect(load(result.html)('pre code').text()).toBe(code);
+  });
+
+  it.each([false, true])(
+    'keeps code text after dropping ordinary whitespace-only nodes (macCodeBlock=%s)',
+    async (macCodeBlock) => {
+      const code = [
+        'class CanvasNodeView: UIView {',
+        '    func refreshBorder() {',
+        '        print("hello world")',
+        '',
+        '        if UIDevice.current.orientation.isLandscape {',
+        '            let scale = self.traitCollection.displayScale',
+        '        }',
+        '    }',
+        '}',
+      ].join('\n');
+      const result = await renderMarkdownToWechat('Body text.\n\n```swift\n' + code + '\n```', {
+        renderMath: false,
+        renderMermaid: false,
+        macCodeBlock,
+      });
+      const $ = load(result.html);
+      const block = $('pre code');
+      block
+        .find('*')
+        .addBack()
+        .contents()
+        .filter((_, node) => node.type === 'text' && /^[\t\r\n ]+$/.test(node.data))
+        .remove();
+      block.find('br').replaceWith('\n');
+
+      // Empty lines use one non-breaking space to survive editor cleanup.
+      expect(
+        block
+          .text()
+          .replace(/\u00a0/g, ' ')
+          .replace(/^ +$/gm, ''),
+      ).toBe(code);
+      expect(block.text()).toContain('"hello world"');
+      expect($('p').text()).toBe('Body text.');
+      expect(result.html).not.toContain('class="');
+    },
+  );
+
   it.each(['typescript title="example"', 'unknown-language', ''])(
     'renders fenced code text safely through renderer tokens: %j',
     async (info) => {
@@ -13,8 +70,16 @@ describe('Markdown token boundaries', () => {
         macCodeBlock: false,
       });
       const $ = load(result.html);
-      expect($('pre code').text()).toContain('const value = "<script>";');
-      expect($('pre code').text()).toContain('console.log(value);');
+      expect(
+        $('pre code')
+          .text()
+          .replace(/\u00a0/g, ' '),
+      ).toContain('const value = "<script>";');
+      expect(
+        $('pre code')
+          .text()
+          .replace(/\u00a0/g, ' '),
+      ).toContain('console.log(value);');
       expect($('script')).toHaveLength(0);
       expect(result.html).not.toContain('[object Object]');
     },

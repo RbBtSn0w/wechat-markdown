@@ -123,22 +123,38 @@ export function splitHighlightedHtmlByLines(html: string): string[] {
 }
 
 /**
- * Replaces tab indentation and leading/consecutive whitespace with &nbsp;,
- * ensuring indentation survives WeChat rich text sanitization while preserving
- * standard single spaces between words for searchability.
+ * Turns spaces and tabs in code text nodes into &nbsp; where required to survive WeChat sanitization.
+ *
+ * highlight.js emits each token as its own `<span>`, so the space in
+ * `class Canvas` is a whitespace-only text node between tags (`</span> <span>`).
+ * WeChat's editor drops those nodes (`classCanvas`) even when the parent sets `white-space: pre`.
+ * Protect boundary whitespace outside string literals. String text can be split by nested
+ * interpolation spans; changing those fragments would change copied string values.
+ * Internal whitespace in plaintext is also preserved because its literal scope is unknown.
  */
 export function formatCodeLine(lineHtml: string): string {
-  let formatted = lineHtml.replace(/\t/g, '    ');
-  // Transform only the text content outside tags:
-  formatted = formatted.replace(/(<[^>]+>)|([^<]+)/g, (match, tag, text) => {
-    if (tag) return tag;
-    return text.replace(/ {2,}/g, (m: string) => '&nbsp;'.repeat(m.length));
-  });
-  // Match leading spaces, even if preceded by open tags like <span ...>
-  formatted = formatted.replace(
-    /^((?:<[^>]+>)*)( +)/,
-    (_, tags, spaces) => tags + '&nbsp;'.repeat(spaces.length),
+  const literalSpans: boolean[] = [];
+  const formatted = lineHtml.replace(
+    /(<[^>]+>)|([^<]+)/g,
+    (_match, tag: string | undefined, text: string | undefined) => {
+      if (tag) {
+        if (/^<\/span\b/.test(tag)) literalSpans.pop();
+        else if (/^<span\b/.test(tag)) {
+          const parentIsLiteral = literalSpans.at(-1) ?? false;
+          const isSubstitution = /\bhljs-subst\b/.test(tag);
+          literalSpans.push(
+            !isSubstitution && (parentIsLiteral || /\bhljs-(?:string|regexp)\b/.test(tag)),
+          );
+        }
+        return tag;
+      }
+      if (literalSpans.at(-1)) return text!;
+      return text!.replace(/^[ \t]+|[ \t]+$/g, (spaces) =>
+        '&nbsp;'.repeat(spaces.replace(/\t/g, '    ').length),
+      );
+    },
   );
+
   return formatted === '' ? '&nbsp;' : formatted;
 }
 
