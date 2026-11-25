@@ -89,6 +89,8 @@ void render();
       'utf8',
     ),
   );
+  assert.equal(installed.name, '@rbbtsn0w/wechat-markdown');
+  if (process.env.PREVIEW_VERSION) assert.equal(installed.version, process.env.PREVIEW_VERSION);
   console.log(`Packed consumer verified: ${installed.name}@${installed.version}`);
 } finally {
   rmSync(temporary, { recursive: true, force: true });
