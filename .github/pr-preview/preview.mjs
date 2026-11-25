@@ -95,8 +95,8 @@ function installedHint(install) {
     '### Try this exact SDK', '',
     '```bash',
     'consumer="$(mktemp -d)"',
-    'cd "$consumer" && npm init -y',
-    install,
+    'cd "$consumer" && npm init -y &&',
+    install + ' &&',
     "node <<'NODE'",
     "const { renderMarkdownToWechat } = require('@rbbtsn0w/wechat-markdown');",
     "renderMarkdownToWechat('# Preview\\n\\nHello **SDK**.', {",
@@ -114,18 +114,14 @@ export function card(receipt, artifactId, repo, { npm, mirror } = {}) {
   const root = 'https://github.com/' + repo;
   const artifact = root + '/actions/runs/' + receipt.runId + '/artifacts/' + artifactId;
   const spec = receipt.name + '@' + receipt.version;
-  const lines = [
-    '## PR preview · `' + spec + '`', '',
-    'Commit [`' + receipt.head + '`](' + root + '/commit/' + receipt.head + ')',
-    ' · [CI run ' + receipt.runId + '](' + root + '/actions/runs/' + receipt.runId + ')',
-    ' · packaging attempt `' + receipt.attempt + '` · artifact `' + artifactId + '`', '',
-  ];
+  const lines = [];
   if (npm?.available || mirror?.available) {
     const registryStatus = [
       ...(npm?.available ? ['npmjs'] : []), ...(mirror?.available ? ['GitHub Packages'] : []),
     ].join(' and ');
     lines.push(
-      'Verified exact version on ' + registryStatus + '.', '',
+      '## Registry preview · `' + spec + '`', '',
+      'Verified exact version on ' + registryStatus + '. Archive SHA-256 `' + receipt.sha256 + '`.', '',
       '| Registry | Exact version with verified integrity | `next` at read-back |',
       '| --- | --- | --- |',
     );
@@ -138,20 +134,27 @@ export function card(receipt, artifactId, repo, { npm, mirror } = {}) {
         'Set `GH_PACKAGES_TOKEN` with `read:packages` to fetch the exact package from GitHub Packages.',
         'The temporary config applies to the fetch only. Dependencies install from npmjs.', '',
         ...installedHint([
-          'preview_config="$(mktemp)"',
-          "printf '%s\\n' '//npm.pkg.github.com/:_authToken=${GH_PACKAGES_TOKEN}' > \"$preview_config\"",
-          'preview_file="$(npm pack --ignore-scripts --registry=https://npm.pkg.github.com --userconfig="$preview_config" ' + spec + ')"',
-          'rm -f "$preview_config"',
+          'preview_config="$(mktemp)" &&',
+          "printf '%s\\n' '//npm.pkg.github.com/:_authToken=${GH_PACKAGES_TOKEN}' > \"$preview_config\" &&",
+          'preview_file="$(npm pack --ignore-scripts --registry=https://npm.pkg.github.com --userconfig="$preview_config" ' + spec + ')" &&',
+          'rm -f "$preview_config" &&',
           'npm install --ignore-scripts --save-exact "./$preview_file"',
         ].join('\n')),
       );
     }
     lines.push('The repository-wide `next` tag can move when another PR preview is published.', '');
-  } else {
-    lines.push('Artifact-only preview. ' + (receipt.baseline === null
-      ? 'Stable npm latest could not be verified at build time.'
-      : 'Stable npm latest at build time was `' + receipt.baseline + '`.'), '');
   }
+  lines.push(
+    '<!-- pr-preview-artifact -->',
+    '## PR preview archive · `' + spec + '`', '',
+    'Commit [`' + receipt.head + '`](' + root + '/commit/' + receipt.head + ')',
+    ' · [CI run ' + receipt.runId + '](' + root + '/actions/runs/' + receipt.runId + ')',
+    ' · packaging attempt `' + receipt.attempt + '` · artifact `' + artifactId + '`', '',
+  );
+  lines.push(receipt.baseline === null
+    ? 'Stable npm latest could not be verified for this archive. It is available for local verification.'
+    : 'Stable npm latest at the time of packaging was `' + receipt.baseline + '`.', '');
+  const check = "printf '%s  %s\\n' '" + receipt.sha256 + "' \"$preview_dir/" + archive + "\" | shasum -a 256 -c -";
   lines.push(
     '### Download and verify the archive', '',
     '[Download the ZIP](' + artifact + ') (14-day retention). A signed-in GitHub account with repository access is required.', '',
@@ -163,7 +166,7 @@ export function card(receipt, artifactId, repo, { npm, mirror } = {}) {
       + receipt.sha256 + '\' \'' + archive + '\' | shasum -a 256 -c -)',
     '```', '',
     'SHA-256 `' + receipt.sha256 + '`', '',
-    ...installedHint('npm install --ignore-scripts --save-exact "$preview_dir/' + archive + '"'),
+    ...installedHint(check + ' &&\n  npm install --ignore-scripts --save-exact "$preview_dir/' + archive + '"'),
   );
   return lines.join('\n');
 }
